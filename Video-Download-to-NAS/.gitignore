@@ -1,0 +1,35 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Data & Downloads
+downloads/*
+!downloads/.gitkeep
+data/*
+!data/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+*.log
+
+# Build artifacts
+backend/BUILD_TIME
+frontend/BUILD_TIME
