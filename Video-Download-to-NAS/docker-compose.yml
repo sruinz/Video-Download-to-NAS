@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    image: sruinz/vdtnsvr-backend:latest
+    container_name: vdtn-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - /volume1/docker/vdtnsvr/downloads:/app/downloads
+      - /volume1/docker/vdtnsvr/data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - vdtn-network
+
+  frontend:
+    image: sruinz/vdtnsvr-frontend:latest
+    container_name: vdtn-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://backend:8000
+    restart: unless-stopped
+    networks:
+      - vdtn-network
+
+networks:
+  vdtn-network:
+    driver: bridge
+
+volumes:
+  downloads:
+  data:
