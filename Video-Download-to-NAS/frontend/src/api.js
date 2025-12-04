@@ -76,6 +76,24 @@ export const deleteFile = async (fileId) => {
   return response.data;
 };
 
+export const renameFile = async (fileId, newFilename) => {
+  const response = await fetch(`/api/file/${fileId}/rename`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ new_filename: newFilename })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to rename file');
+  }
+  
+  return response.json();
+};
+
 export const getFileUrl = (fileId) => {
   return `${API_URL}/api/file/${fileId}`;
 };
@@ -810,6 +828,40 @@ export const checkForUpdates = async () => {
   
   if (!response.ok) {
     throw new Error('Failed to check for updates');
+  }
+  
+  return response.json();
+};
+
+// === Folder Organization ===
+export const getFolderOrganization = async () => {
+  const response = await fetch('/api/users/me/folder-organization', {
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to get folder organization');
+  }
+  
+  return response.json();
+};
+
+export const updateFolderOrganization = async (mode) => {
+  const response = await fetch('/api/users/me/folder-organization', {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ mode })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update folder organization');
   }
   
   return response.json();

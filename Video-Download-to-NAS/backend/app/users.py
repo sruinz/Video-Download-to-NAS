@@ -178,10 +178,9 @@ async def update_current_user(
                         detail="DISPLAY_NAME_TAKEN"
                     )
                 
-                # Check if this matches any username (except own username)
+                # Check if this matches any username
                 existing_username = db.query(User).filter(
-                    User.username == new_display_name,
-                    User.id != current_user.id
+                    User.username == new_display_name
                 ).first()
                 
                 if existing_username:
@@ -378,10 +377,6 @@ async def delete_user(
                 detail="Cannot delete the last super_admin"
             )
     
-    # Clear display name to allow reuse
-    user.display_name = None
-    db.commit()
-    
     # Delete user (cascade will delete files)
     db.delete(user)
     db.commit()
@@ -458,11 +453,6 @@ async def reject_user(
         )
     
     username = user.username
-    
-    # Clear display name to allow reuse
-    user.display_name = None
-    db.commit()
-    
     db.delete(user)
     db.commit()
     
@@ -495,11 +485,9 @@ async def update_folder_organization(
     
     지원되는 모드:
     - root: 루트 폴더에 저장 (username/)
-    - date: 날짜 폴더 (username/2024-12-04/)
     - site_full: 전체 도메인 폴더 (username/youtube.com/)
     - site_name: 도메인명만 (username/youtube/)
-    - date_site_full: 날짜 + 전체 도메인 (username/2024-12-04/youtube.com/)
-    - date_site_name: 날짜 + 도메인명 (username/2024-12-04/youtube/)
+    - root_date: 루트 + 날짜 폴더 (username/2024-12-04/)
     - site_full_date: 전체 도메인 + 날짜 폴더 (username/youtube.com/2024-12-04/)
     - site_name_date: 도메인명 + 날짜 폴더 (username/youtube/2024-12-04/)
     
@@ -514,16 +502,10 @@ async def update_folder_organization(
     Raises:
         HTTPException: 유효하지 않은 모드인 경우 400 에러
     """
-    import logging
     from ..path_helper import FOLDER_MODES
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"[Folder Organization] User {current_user.username} (ID: {current_user.id}) attempting to update folder mode to: {folder_update.mode}")
-    logger.info(f"[Folder Organization] Available modes: {FOLDER_MODES}")
     
     # 모드 검증 (Pydantic이 이미 검증하지만 추가 안전장치)
     if folder_update.mode not in FOLDER_MODES:
-        logger.error(f"[Folder Organization] Invalid mode '{folder_update.mode}' rejected for user {current_user.username}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid folder mode. Must be one of: {', '.join(FOLDER_MODES)}"
@@ -533,8 +515,6 @@ async def update_folder_organization(
     current_user.folder_organization_mode = folder_update.mode
     db.commit()
     db.refresh(current_user)
-    
-    logger.info(f"[Folder Organization] Successfully updated folder mode for user {current_user.username} to: {current_user.folder_organization_mode}")
     
     return FolderOrganizationResponse(mode=current_user.folder_organization_mode)
 
@@ -719,10 +699,9 @@ async def admin_update_user(
                     detail="DISPLAY_NAME_TAKEN"
                 )
             
-            # Check if this matches any username (except own username)
+            # Check if this matches any username
             existing_username = db.query(User).filter(
-                User.username == new_display_name,
-                User.id != user.id
+                User.username == new_display_name
             ).first()
             
             if existing_username:

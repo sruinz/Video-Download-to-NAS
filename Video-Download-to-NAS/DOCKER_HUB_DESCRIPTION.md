@@ -51,14 +51,58 @@ Access at http://localhost:3000
 
 ## 🔧 Configuration
 
-Edit `.env`:
+### Required Settings
+
+Edit `.env` file (copy from `.env.example`):
 
 ```env
-DEFAULT_USER=admin
-DEFAULT_PASSWORD=your_password
-DOWNLOAD_PATH=/downloads
-JWT_SECRET=your_secret_key
+# Required - Change in production!
+JWT_SECRET=your-unique-secret-key-32-64-chars
+
+# Required - CORS origins
+ALLOWED_ORIGINS=*
+
+# Required - URLs for your environment
+BACKEND_URL=http://localhost:8000
+FRONTEND_URL=http://localhost:3000
+SERVER_URL=http://localhost:3000
+
+# Optional - Only if using SSO
+SSO_ENCRYPTION_KEY=
+
+# Optional - Telegram Bot (for notifications)
+TELEGRAM_BOT_ENABLED=false
+TELEGRAM_BOT_AUTO_START=false
 ```
+
+### Volume Configuration
+
+Configure paths in `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./downloads:/app/downloads  # Downloaded files
+  - ./data:/app/data            # Database
+```
+
+### Initial Setup
+
+1. Start containers: `docker-compose up -d`
+2. Access http://localhost:3000
+3. **Register first account - becomes super_admin automatically**
+4. Configure additional settings in web UI
+
+### Optional Features
+
+**Telegram Bot**: Enable in web UI after setup
+- Set `TELEGRAM_BOT_ENABLED=true` in `.env`
+- Configure bot token and settings in web interface
+
+**SSO Authentication**: For enterprise environments
+- Generate `SSO_ENCRYPTION_KEY` if needed
+- Configure providers in web UI
+
+For detailed configuration, see `.env.example` in repository.
 
 ## 📖 Documentation
 

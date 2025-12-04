@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Mail, Key, Save, Shield, Link as LinkIcon, Unlink, CheckCircle, Code, Copy, Trash2, Plus, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { updateCurrentUser, getSettings, getEnabledSSOProviders, getAPITokens, createAPIToken, revokeAPIToken, getTelegramBotStatus, setupTelegramBot, updateTelegramBot, startTelegramBot, stopTelegramBot, testTelegramBot, deleteTelegramBot, resetTelegramBotChatId } from '../../api';
+import { updateCurrentUser, getSettings, getEnabledSSOProviders, getAPITokens, createAPIToken, revokeAPIToken, getTelegramBotStatus, setupTelegramBot, updateTelegramBot, startTelegramBot, stopTelegramBot, testTelegramBot, deleteTelegramBot, resetTelegramBotChatId, getFolderOrganization, updateFolderOrganization } from '../../api';
 import showToast from '../../utils/toast';
 
 // Provider 아이콘 (SSOAccountModal과 동일)
@@ -63,7 +63,7 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
     confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile'); // profile, security, sso, api-tokens
+  const [activeTab, setActiveTab] = useState('profile'); // profile, security, sso, api-tokens, folder-organization
   const [ssoProviders, setSSOProviders] = useState([]);
   const [loadingSSOProviders, setLoadingSSOProviders] = useState(false);
   const [cooldownDays, setCooldownDays] = useState(30);
@@ -88,6 +88,12 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
   const [progressNotifications, setProgressNotifications] = useState(false);
   const [testingBot, setTestingBot] = useState(false);
   const [showDeleteBotModal, setShowDeleteBotModal] = useState(false);
+  
+  // Folder Organization state
+  const [folderMode, setFolderMode] = useState('root');
+  const [firstLevel, setFirstLevel] = useState('none');
+  const [secondLevel, setSecondLevel] = useState('none');
+  const [loadingFolderSettings, setLoadingFolderSettings] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -136,6 +142,11 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
       // Telegram Bot 탭일 때 봇 상태 로드
       if (activeTab === 'telegram-bot') {
         loadBotStatus();
+      }
+      
+      // Folder Organization 탭일 때 설정 로드
+      if (activeTab === 'folder-organization') {
+        loadFolderOrganizationSettings();
       }
     }
   }, [isOpen, currentUser, activeTab]);
@@ -346,6 +357,111 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
     } finally {
       setLoadingBot(false);
     }
+  };
+
+  // Folder Organization functions
+  const loadFolderOrganizationSettings = async () => {
+    try {
+      setLoadingFolderSettings(true);
+      const response = await getFolderOrganization();
+      setFolderMode(response.mode);
+      // Parse mode into first and second level
+      const { first, second } = parseFolderMode(response.mode);
+      setFirstLevel(first);
+      setSecondLevel(second);
+    } catch (error) {
+      console.error('Failed to load folder organization settings:', error);
+      showToast.error(t('settings.system.folderOrganizationFailed'));
+    } finally {
+      setLoadingFolderSettings(false);
+    }
+  };
+
+  const handleSaveFolderOrganization = async () => {
+    try {
+      setLoadingFolderSettings(true);
+      // Combine first and second level into mode
+      const mode = combineFolderMode(firstLevel, secondLevel);
+      await updateFolderOrganization(mode);
+      setFolderMode(mode);
+      showToast.success(t('settings.system.folderOrganizationSaved'));
+    } catch (error) {
+      console.error('Failed to save folder organization settings:', error);
+      showToast.error(t('settings.system.folderOrganizationFailed'));
+    } finally {
+      setLoadingFolderSettings(false);
+    }
+  };
+
+  // Convert snake_case to camelCase for translation keys
+  const toCamelCase = (str) => {
+    return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  };
+
+  // Parse folder mode into first and second level
+  const parseFolderMode = (mode) => {
+    if (mode === 'root') return { first: 'none', second: 'none' };
+    if (mode === 'date') return { first: 'date', second: 'none' };
+    if (mode === 'site_full') return { first: 'site_full', second: 'none' };
+    if (mode === 'site_name') return { first: 'site_name', second: 'none' };
+    if (mode === 'date_site_full') return { first: 'date', second: 'site_full' };
+    if (mode === 'date_site_name') return { first: 'date', second: 'site_name' };
+    if (mode === 'site_full_date') return { first: 'site_full', second: 'date' };
+    if (mode === 'site_name_date') return { first: 'site_name', second: 'date' };
+    return { first: 'none', second: 'none' };
+  };
+
+  // Combine first and second level into folder mode
+  const combineFolderMode = (first, second) => {
+    if (first === 'none') return 'root';
+    if (second === 'none') {
+      if (first === 'date') return 'date';
+      if (first === 'site_full') return 'site_full';
+      if (first === 'site_name') return 'site_name';
+    }
+    if (first === 'date') {
+      if (second === 'site_full') return 'date_site_full';
+      if (second === 'site_name') return 'date_site_name';
+    }
+    if (first === 'site_full') {
+      if (second === 'date') return 'site_full_date';
+    }
+    if (first === 'site_name') {
+      if (second === 'date') return 'site_name_date';
+    }
+    return 'root';
+  };
+
+  // Get available second level options based on first level
+  const getSecondLevelOptions = (first) => {
+    if (first === 'date') return ['site_full', 'site_name'];
+    if (first === 'site_full' || first === 'site_name') return ['date'];
+    return [];
+  };
+
+  // Handle first level change
+  const handleFirstLevelChange = (value) => {
+    setFirstLevel(value);
+    // Reset second level if it's not compatible
+    const availableOptions = getSecondLevelOptions(value);
+    if (value === 'none' || !availableOptions.includes(secondLevel)) {
+      setSecondLevel('none');
+    }
+  };
+
+  const getFolderPreview = (mode) => {
+    const username = currentUser?.username || 'username';
+    const examples = {
+      'root': `${username}/video.mp4`,
+      'date': `${username}/2025-12-04/video.mp4`,
+      'site_full': `${username}/example.com/video.mp4`,
+      'site_name': `${username}/example/video.mp4`,
+      'date_site_full': `${username}/2025-12-04/example.com/video.mp4`,
+      'date_site_name': `${username}/2025-12-04/example/video.mp4`,
+      'site_full_date': `${username}/example.com/2025-12-04/video.mp4`,
+      'site_name_date': `${username}/example/2025-12-04/video.mp4`
+    };
+    return examples[mode] || examples['root'];
   };
 
   const loadSSOProviders = async () => {
@@ -639,6 +755,22 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
                 </div>
               </button>
             )}
+            {/* Folder Organization Tab */}
+            <button
+              onClick={() => setActiveTab('folder-organization')}
+              className={`px-4 sm:px-6 py-3 font-medium transition-colors ${
+                activeTab === 'folder-organization'
+                  ? 'text-yt-red border-b-2 border-yt-red'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span className="whitespace-nowrap text-sm sm:text-base">{t('settings.system.folderOrganization')}</span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -1216,8 +1348,91 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
             </div>
           )}
 
+          {/* Folder Organization Tab */}
+          {activeTab === 'folder-organization' && (
+            <div className="space-y-4">
+              {loadingFolderSettings ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yt-red mx-auto"></div>
+                  <p className="text-gray-400 mt-4">{t('common.loading')}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Info */}
+                  <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+                    <p className="text-sm text-blue-200">
+                      💡 {t('settings.system.folderOrganizationInfo')}
+                    </p>
+                  </div>
+
+                  {/* Two-Step Folder Selection */}
+                  <div className="space-y-4">
+                    {/* First Level Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        {t('settings.system.firstLevelFolder')}
+                      </label>
+                      <select
+                        value={firstLevel}
+                        onChange={(e) => handleFirstLevelChange(e.target.value)}
+                        className="w-full bg-yt-light text-white rounded-lg p-3 border border-gray-700 focus:border-yt-red focus:outline-none"
+                      >
+                        <option value="none">{t('settings.system.folderMode.none')}</option>
+                        <option value="date">{t('settings.system.folderMode.date')}</option>
+                        <option value="site_full">{t('settings.system.folderMode.siteFull')}</option>
+                        <option value="site_name">{t('settings.system.folderMode.siteName')}</option>
+                      </select>
+                    </div>
+
+                    {/* Second Level Selection (conditional) */}
+                    {firstLevel !== 'none' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('settings.system.secondLevelFolder')}
+                        </label>
+                        <select
+                          value={secondLevel}
+                          onChange={(e) => setSecondLevel(e.target.value)}
+                          className="w-full bg-yt-light text-white rounded-lg p-3 border border-gray-700 focus:border-yt-red focus:outline-none"
+                        >
+                          <option value="none">{t('settings.system.folderMode.none')}</option>
+                          {getSecondLevelOptions(firstLevel).map(option => (
+                            <option key={option} value={option}>
+                              {t(`settings.system.folderMode.${toCamelCase(option)}`)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Preview */}
+                  <div className="bg-yt-dark rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">
+                      {t('settings.system.folderPreview')}
+                    </h4>
+                    <div className="text-sm text-gray-400 font-mono bg-yt-darker px-3 py-2 rounded">
+                      {t('settings.system.folderPreviewExample', { path: getFolderPreview(combineFolderMode(firstLevel, secondLevel)) })}
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    type="button"
+                    onClick={handleSaveFolderOrganization}
+                    disabled={loadingFolderSettings}
+                    className="w-full bg-yt-red hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{loadingFolderSettings ? t('profile.saving') : t('profile.saveChanges')}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
-          {activeTab !== 'sso' && activeTab !== 'api-tokens' && activeTab !== 'telegram-bot' && (
+          {activeTab !== 'sso' && activeTab !== 'api-tokens' && activeTab !== 'telegram-bot' && activeTab !== 'folder-organization' && (
             <div className="flex gap-3 pt-4 border-t border-gray-700">
             <button
               type="button"

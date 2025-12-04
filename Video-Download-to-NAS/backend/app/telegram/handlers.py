@@ -142,7 +142,16 @@ class BaseBotHandlers:
         raise NotImplementedError("Subclasses must implement handle_message")
         
     async def send_download_request(self, url: str, resolution: str) -> Dict[str, Any]:
-        """다운로드 API 호출"""
+        """
+        다운로드 API 호출
+        
+        이 메서드는 /rest API 엔드포인트를 호출하며, 해당 엔드포인트는
+        download_video() 함수를 통해 path_helper.get_user_download_path()를 사용하여
+        사용자의 폴더 구성 설정에 따라 다운로드 경로를 결정합니다.
+        
+        이를 통해 텔레그램 봇 다운로드와 웹 UI 다운로드가 동일한 폴더 구성 로직을 사용하여
+        일관된 동작을 보장합니다.
+        """
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
