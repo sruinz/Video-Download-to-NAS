@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 💡 Feature Request or Question
-    url: https://github.com/yourusername/video-download-to-nas/discussions
+    url: https://github.com/sruinz/Video-Download-to-NAS/discussions
     about: This project is not actively accepting feature requests. Please fork the repository to add features yourself, or ask questions in Discussions.
   - name: 📖 Documentation
-    url: https://github.com/yourusername/video-download-to-nas/blob/main/README.md
+    url: https://github.com/sruinz/Video-Download-to-NAS/blob/main/README.md
     about: Read the documentation for setup and usage instructions

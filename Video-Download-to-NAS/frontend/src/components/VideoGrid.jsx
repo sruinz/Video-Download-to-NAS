@@ -1,13 +1,13 @@
 import React from 'react';
-import { Play, Download as DownloadIcon, Trash2, FileVideo, FileAudio, FileText, ExternalLink, Globe, Link as LinkIcon } from 'lucide-react';
+import { Play, Download as DownloadIcon, Trash2, FileVideo, FileAudio, FileText, ExternalLink, Globe, Link as LinkIcon, Edit2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { deleteFile, getFileUrl, publishFileToBoard, unpublishFileFromBoard } from '../api';
+import { deleteFile, getFileUrl, publishFileToBoard, unpublishFileFromBoard, renameFile } from '../api';
 import showToast from '../utils/toast';
 import { useModal } from '../contexts/ModalContext';
 
 export default function VideoGrid({ files, onFileDeleted, onFileUpdated, currentUser }) {
   const { t } = useTranslation();
-  const { showConfirmModal, showVideoPlayer, openModal } = useModal();
+  const { showConfirmModal, showVideoPlayer, openModal, showInputModal } = useModal();
   
   // Filter only video and audio files for playlist
   const playableFiles = files.filter(file => 
@@ -79,6 +79,50 @@ export default function VideoGrid({ files, onFileDeleted, onFileUpdated, current
     } catch (error) {
       showToast.dismiss(toastId);
       showToast.error('Download failed: ' + error.message);
+    }
+  };
+
+  const handleRename = async (file) => {
+    // Extract just the filename without path and extension
+    const currentFilename = file.filename.split('/').pop();
+    const lastDotIndex = currentFilename.lastIndexOf('.');
+    const nameWithoutExt = lastDotIndex > 0 ? currentFilename.substring(0, lastDotIndex) : currentFilename;
+    const extension = lastDotIndex > 0 ? currentFilename.substring(lastDotIndex) : '';
+
+    try {
+      const newFilename = await showInputModal({
+        title: t('file.renameTitle'),
+        label: t('file.renamePrompt'),
+        defaultValue: nameWithoutExt,
+        placeholder: t('file.newFilename'),
+        validation: (value) => {
+          const trimmed = value.trim();
+          if (!trimmed) return t('file.filenameEmpty');
+          if (trimmed.length > 200) return t('file.filenameTooLong');
+          // Check for invalid characters
+          if (/[<>:"|?*\x00-\x1f/\\]/.test(trimmed)) return t('file.invalidFilename');
+          return null;
+        }
+      });
+
+      if (!newFilename) return;
+
+      const toastId = showToast.loading(t('file.rename') + '...');
+      try {
+        // Add extension back
+        const finalFilename = newFilename.trim() + extension;
+        await renameFile(file.id, finalFilename);
+        showToast.dismiss(toastId);
+        showToast.success(t('file.renameSuccess'));
+        // Refresh the file list
+        if (onFileUpdated) onFileUpdated();
+      } catch (error) {
+        showToast.dismiss(toastId);
+        const errorMsg = error.message || t('file.renameFailed');
+        showToast.error(errorMsg);
+      }
+    } catch (error) {
+      // User cancelled
     }
   };
 
@@ -225,6 +269,13 @@ export default function VideoGrid({ files, onFileDeleted, onFileUpdated, current
             {/* Action buttons row */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-700">
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleRename(file)}
+                  className="p-1.5 text-gray-400 hover:bg-gray-600/20 rounded transition-colors"
+                  title={t('file.rename')}
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
                 {file.original_url && (
                   <a
                     href={file.original_url}

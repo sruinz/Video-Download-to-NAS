@@ -168,6 +168,7 @@ async def download_video(
     """Download video using yt-dlp"""
     from .database import User
     from .telegram.notifications import notification_manager
+    from .path_helper import get_user_download_path
     import logging
     
     logger = logging.getLogger(__name__)
@@ -188,9 +189,13 @@ async def download_video(
         user = db.query(User).filter(User.id == user_id).first()
         username = user.username if user else f"user_{user_id}"
         
-        # Create user-specific download directory
-        user_download_dir = os.path.join(DOWNLOADS_DIR, username)
-        os.makedirs(user_download_dir, exist_ok=True)
+        # Get user-specific download path using path helper
+        relative_download_path = get_user_download_path(db, user_id, username, url)
+        user_download_dir = os.path.join(DOWNLOADS_DIR, relative_download_path)
+        
+        # Create directory with all parent directories
+        from pathlib import Path
+        Path(user_download_dir).mkdir(parents=True, exist_ok=True)
 
         # Parse resolution options
         options = parse_resolution(resolution)
@@ -209,6 +214,13 @@ async def download_video(
             'yes_playlist': True,  # Download entire playlist if URL is a playlist
             **options
         }
+        
+        # 프록시 설정 (WARP, SOCKS5, HTTP, VPN 등 모든 프록시 지원)
+        proxy_url = os.getenv('PROXY')
+        if proxy_url:
+            ydl_opts['proxy'] = proxy_url
+            print(f"[Download] Using proxy: {proxy_url}")
+            logger.info(f"Using proxy for download: {proxy_url}")
 
         download_status[download_id]['status'] = 'downloading'
         
@@ -303,13 +315,28 @@ async def download_video(
             else:
                 print(f"[Download] Different extension ({existing_ext} vs {file_extension}), creating new record")
         
+        # Find local thumbnail file (yt-dlp saves it with same name as video)
+        # yt-dlp saves thumbnail as: video_name.webp, video_name.jpg, etc.
+        local_thumbnail = None
+        video_stem = os.path.splitext(full_path)[0]  # /path/to/video (without extension)
+        thumbnail_extensions = ['.webp', '.jpg', '.jpeg', '.png', '.gif']
+        for thumb_ext in thumbnail_extensions:
+            potential_thumb = video_stem + thumb_ext
+            if os.path.exists(potential_thumb):
+                local_thumbnail = os.path.relpath(potential_thumb, DOWNLOADS_DIR)
+                print(f"[Download] Found local thumbnail: {local_thumbnail}")
+                break
+        
+        # Use local thumbnail path if found, otherwise use URL from yt-dlp
+        thumbnail_value = local_thumbnail if local_thumbnail else result.get('thumbnail')
+        
         # Update existing file or create new one
         if should_update:
             # Update existing record
             existing_file.filename = relative_path
             existing_file.file_type = actual_file_type
             existing_file.file_size = result.get('filesize')
-            existing_file.thumbnail = result.get('thumbnail')
+            existing_file.thumbnail = thumbnail_value
             existing_file.duration = result.get('duration')
             file_info = existing_file
         else:
@@ -320,7 +347,7 @@ async def download_video(
                 original_url=url,
                 file_type=actual_file_type,
                 file_size=result.get('filesize'),
-                thumbnail=result.get('thumbnail'),
+                thumbnail=thumbnail_value,
                 duration=result.get('duration'),
                 user_id=user_id
             )

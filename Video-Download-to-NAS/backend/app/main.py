@@ -13,7 +13,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from .models import UserLogin, DownloadRequest, FileInfo, Token, DownloadStatus
+from .models import UserLogin, DownloadRequest, FileInfo, Token, DownloadStatus, FileRenameRequest
 from .database import init_db, get_db, User, DownloadedFile, SessionLocal, engine, SystemSetting
 from .auth import (
     authenticate_user,
@@ -29,7 +29,7 @@ from .library_sync import sync_user_library, sync_all_libraries
 
 # Rate limiter setup (will be configured from DB after startup)
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
-app = FastAPI(title="Video Download to NAS API", version="1.1.5")  # Updated by update_version.sh during build
+app = FastAPI(title="Video Download to NAS API", version="1.1.6")  # Updated by update_version.sh during build
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -235,6 +235,33 @@ async def startup_event():
         logger.error(f"User approval migration error: {e}")
         print(f"⚠️  User approval migration warning: {e}")
     
+    # Run folder organization schema migration
+    try:
+        from .migrations import migrate_folder_organization_schema
+        migrate_folder_organization_schema(db)
+        print("✅ Folder organization schema migration completed")
+    except Exception as e:
+        logger.error(f"Folder organization migration error: {e}")
+        print(f"⚠️  Folder organization migration warning: {e}")
+    
+    # Run thumbnail migration to local files
+    try:
+        from .migrations import migrate_thumbnails_to_local
+        result = migrate_thumbnails_to_local(db)
+        print(f"✅ Thumbnail migration completed: {result['migrated_count']} files migrated")
+    except Exception as e:
+        logger.error(f"Thumbnail migration error: {e}")
+        print(f"⚠️  Thumbnail migration warning: {e}")
+    
+    # Clear display_name for deleted users to prevent nickname conflicts
+    try:
+        from .migrations import migrate_clear_deleted_user_display_names
+        result = migrate_clear_deleted_user_display_names(db)
+        print(f"✅ Deleted user display name cleanup completed: {result['cleared_count']} users cleared")
+    except Exception as e:
+        logger.error(f"Deleted user display name cleanup error: {e}")
+        print(f"⚠️  Deleted user display name cleanup warning: {e}")
+    
     # Start SSO state cleanup scheduler
     try:
         start_scheduler()
@@ -285,7 +312,7 @@ async def shutdown_event():
 async def root():
     return {
         "message": "Video Download to NAS API",
-        "version": "1.1.5",
+        "version": "1.1.6",
         "status": "running",
         "legal_notice": "This software is a tool for legitimate media archiving. Users are responsible for compliance with copyright laws and platform terms of service.",
         "documentation": {
@@ -624,18 +651,252 @@ async def delete_file(
     
     # Delete thumbnail if exists
     if file_info.thumbnail:
-        # Thumbnail is usually saved with same name but .webp or .jpg extension
+        # thumbnail이 URL이 아닌 경우 (로컬 파일)
+        if not file_info.thumbnail.startswith('http'):
+            # DB에 저장된 thumbnail 경로 사용
+            thumbnail_path = Path("/app/downloads") / file_info.thumbnail
+            if thumbnail_path.exists():
+                thumbnail_path.unlink()
+                logger.info(f"Deleted thumbnail: {thumbnail_path}")
+        
+        # 추가로 동일한 이름의 다른 썸네일 확장자도 확인
         base_name = file_path.stem
         for ext in ['.webp', '.jpg', '.png']:
             thumb_path = file_path.parent / f"{base_name}{ext}"
             if thumb_path.exists():
                 thumb_path.unlink()
+                logger.info(f"Deleted additional thumbnail: {thumb_path}")
 
     # Delete from database
     db.delete(file_info)
     db.commit()
 
     return {"status": "success", "message": "File deleted"}
+
+
+@app.patch("/api/file/{file_id}/rename")
+async def rename_file(
+    file_id: int,
+    rename_request: FileRenameRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Rename a file
+    
+    Validates new filename to prevent:
+    - Path traversal attacks
+    - Invalid characters
+    - Duplicate filenames
+    
+    Preserves file extension automatically.
+    """
+    import re
+    
+    # Get file info
+    file_info = db.query(DownloadedFile)\
+        .filter(DownloadedFile.id == file_id)\
+        .filter(DownloadedFile.user_id == current_user.id)\
+        .first()
+
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Extract new filename from request
+    new_filename = rename_request.new_filename.strip()
+    if not new_filename:
+        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    
+    # Check for path traversal attempts
+    if '..' in new_filename or '/' in new_filename or '\\' in new_filename:
+        raise HTTPException(status_code=400, detail="Invalid filename: path traversal not allowed")
+    
+    # Sanitize filename (remove invalid characters)
+    invalid_chars = r'[<>:"|?*\x00-\x1f]'
+    new_filename = re.sub(invalid_chars, '', new_filename)
+    
+    if not new_filename:
+        raise HTTPException(status_code=400, detail="Filename contains only invalid characters")
+    
+    # Get current file path
+    old_file_path = Path("/app/downloads") / file_info.filename
+    
+    # Extract directory and extension from old filename
+    old_dir = old_file_path.parent
+    old_ext = old_file_path.suffix
+    
+    # Ensure new filename has the same extension
+    if not new_filename.endswith(old_ext):
+        new_filename = new_filename + old_ext
+    
+    # Create new file path
+    new_file_path = old_dir / new_filename
+    
+    # Check if new filename already exists
+    if new_file_path.exists() and new_file_path != old_file_path:
+        raise HTTPException(status_code=400, detail="A file with this name already exists")
+    
+    # Save old video stem BEFORE renaming (needed for thumbnail rename)
+    old_video_stem = old_file_path.stem
+    old_video_dir = old_file_path.parent
+    
+    # Rename physical file
+    if old_file_path.exists():
+        try:
+            old_file_path.rename(new_file_path)
+        except Exception as e:
+            logger.error(f"Failed to rename file: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")
+    else:
+        raise HTTPException(status_code=404, detail="Physical file not found")
+    
+    # Rename thumbnail if it exists
+    print(f"[THUMBNAIL RENAME] Checking thumbnail for file {file_info.id}: thumbnail='{file_info.thumbnail}'", flush=True)
+    logger.info(f"Checking thumbnail for file {file_info.id}: thumbnail='{file_info.thumbnail}'")
+    if file_info.thumbnail:
+        # Thumbnail path is stored as relative path in DB
+        old_thumbnail_path = Path("/app/downloads") / file_info.thumbnail
+        print(f"[THUMBNAIL RENAME] Thumbnail path from DB: {old_thumbnail_path}", flush=True)
+        logger.info(f"Thumbnail path from DB: {old_thumbnail_path}")
+        
+        # Check if thumbnail exists at the DB path
+        thumbnail_found = False
+        if not file_info.thumbnail.startswith(('http://', 'https://')) and old_thumbnail_path.exists():
+            thumbnail_found = True
+            logger.info(f"Thumbnail found at DB path: {old_thumbnail_path}")
+        
+        # If not found at DB path, search in the same directory as the video file
+        if not thumbnail_found and not file_info.thumbnail.startswith(('http://', 'https://')):
+            logger.warning(f"Thumbnail not found at DB path: {old_thumbnail_path}, searching in video directory...")
+            
+            # Search for thumbnail files with common patterns using OLD video name
+            for pattern in [f"{old_video_stem}_thumb.*", f"{old_video_stem}.*"]:
+                for thumb_file in old_video_dir.glob(pattern):
+                    # Skip the video file itself
+                    if thumb_file.suffix.lower() in ['.jpg', '.jpeg', '.webp', '.png', '.gif']:
+                        old_thumbnail_path = thumb_file
+                        thumbnail_found = True
+                        logger.info(f"Found thumbnail file: {old_thumbnail_path}")
+                        break
+                if thumbnail_found:
+                    break
+        
+        # Only rename if thumbnail was found
+        if thumbnail_found and old_thumbnail_path.exists():
+            # Get the old thumbnail filename and extension
+            old_thumbnail_name = old_thumbnail_path.name
+            thumbnail_ext = old_thumbnail_path.suffix
+            
+            # Try to detect thumbnail naming pattern and preserve it
+            # Pattern 1: {video_name}_thumb.{ext} (generated thumbnails)
+            # Pattern 2: {video_name}.{ext} (yt-dlp downloaded thumbnails)
+            
+            # Create new thumbnail filename based on new video name
+            if "_thumb" in old_thumbnail_name:
+                # Generated thumbnail pattern
+                new_thumbnail_name = new_file_path.stem + "_thumb" + thumbnail_ext
+            else:
+                # Downloaded thumbnail pattern - keep same extension
+                new_thumbnail_name = new_file_path.stem + thumbnail_ext
+            
+            new_thumbnail_path = new_file_path.parent / new_thumbnail_name
+            logger.info(f"Attempting to rename thumbnail: {old_thumbnail_path} -> {new_thumbnail_path}")
+            
+            try:
+                old_thumbnail_path.rename(new_thumbnail_path)
+                # Update thumbnail path in database
+                new_thumbnail_relative = str(new_thumbnail_path.relative_to(Path("/app/downloads")))
+                file_info.thumbnail = new_thumbnail_relative
+                logger.info(f"✅ Successfully renamed thumbnail: {old_thumbnail_path} -> {new_thumbnail_path}")
+            except Exception as e:
+                logger.error(f"❌ Failed to rename thumbnail: {e}", exc_info=True)
+                # Don't fail the whole operation if thumbnail rename fails
+        elif not file_info.thumbnail.startswith(('http://', 'https://')) and not old_thumbnail_path.exists():
+            # Thumbnail file doesn't exist, but DB has a path - try to find it with different extensions
+            logger.warning(f"Thumbnail file not found at expected path: {old_thumbnail_path}")
+            # Try common thumbnail extensions
+            thumbnail_extensions = ['.jpg', '.jpeg', '.webp', '.png', '.gif']
+            # Use the old_video_stem that was saved BEFORE renaming the video file
+            
+            for ext in thumbnail_extensions:
+                # Try with _thumb suffix
+                potential_thumb = old_video_dir / f"{old_video_stem}_thumb{ext}"
+                if potential_thumb.exists():
+                    try:
+                        new_thumbnail_name = new_file_path.stem + "_thumb" + ext
+                        new_thumbnail_path = new_file_path.parent / new_thumbnail_name
+                        potential_thumb.rename(new_thumbnail_path)
+                        new_thumbnail_relative = str(new_thumbnail_path.relative_to(Path("/app/downloads")))
+                        file_info.thumbnail = new_thumbnail_relative
+                        logger.info(f"Found and renamed thumbnail: {potential_thumb} -> {new_thumbnail_path}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to rename found thumbnail: {e}")
+                
+                # Try without _thumb suffix
+                potential_thumb = old_video_dir / f"{old_video_stem}{ext}"
+                if potential_thumb.exists():
+                    try:
+                        new_thumbnail_name = new_file_path.stem + ext
+                        new_thumbnail_path = new_file_path.parent / new_thumbnail_name
+                        potential_thumb.rename(new_thumbnail_path)
+                        new_thumbnail_relative = str(new_thumbnail_path.relative_to(Path("/app/downloads")))
+                        file_info.thumbnail = new_thumbnail_relative
+                        logger.info(f"Found and renamed thumbnail: {potential_thumb} -> {new_thumbnail_path}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to rename found thumbnail: {e}")
+    else:
+        # No thumbnail in DB, search file system
+        print(f"[THUMBNAIL RENAME] No thumbnail in DB, searching file system...", flush=True)
+        logger.info(f"No thumbnail in DB, searching file system for thumbnails...")
+        thumbnail_extensions = ['.jpg', '.jpeg', '.webp', '.png', '.gif']
+        for ext in thumbnail_extensions:
+            # Try with _thumb suffix (직접 생성한 썸네일)
+            potential_thumb = old_video_dir / f"{old_video_stem}_thumb{ext}"
+            if potential_thumb.exists():
+                try:
+                    new_thumbnail_name = new_file_path.stem + "_thumb" + ext
+                    new_thumbnail_path = new_file_path.parent / new_thumbnail_name
+                    potential_thumb.rename(new_thumbnail_path)
+                    new_thumbnail_relative = str(new_thumbnail_path.relative_to(Path("/app/downloads")))
+                    file_info.thumbnail = new_thumbnail_relative
+                    print(f"[THUMBNAIL RENAME] Found and renamed thumbnail: {potential_thumb} -> {new_thumbnail_path}", flush=True)
+                    logger.info(f"Found and renamed thumbnail: {potential_thumb} -> {new_thumbnail_path}")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to rename found thumbnail: {e}")
+            # Try without _thumb suffix (다운로드된 썸네일)
+            potential_thumb = old_video_dir / f"{old_video_stem}{ext}"
+            if potential_thumb.exists():
+                try:
+                    new_thumbnail_name = new_file_path.stem + ext
+                    new_thumbnail_path = new_file_path.parent / new_thumbnail_name
+                    potential_thumb.rename(new_thumbnail_path)
+                    new_thumbnail_relative = str(new_thumbnail_path.relative_to(Path("/app/downloads")))
+                    file_info.thumbnail = new_thumbnail_relative
+                    print(f"[THUMBNAIL RENAME] Found and renamed thumbnail: {potential_thumb} -> {new_thumbnail_path}", flush=True)
+                    logger.info(f"Found and renamed thumbnail: {potential_thumb} -> {new_thumbnail_path}")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to rename found thumbnail: {e}")
+    
+    # Update database
+    # filename is relative path: username/folder/filename.ext
+    new_relative_path = str(new_file_path.relative_to(Path("/app/downloads")))
+    file_info.filename = new_relative_path
+    db.commit()
+    db.refresh(file_info)
+    
+    return {
+        "status": "success",
+        "message": "File renamed successfully",
+        "new_filename": new_filename,
+        "file": {
+            "id": file_info.id,
+            "filename": file_info.filename
+        }
+    }
+
 
 # === File Sharing Endpoints ===
 

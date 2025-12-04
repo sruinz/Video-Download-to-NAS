@@ -554,6 +554,116 @@ def migrate_user_approval_schema(db: Session):
     }
 
 
+def migrate_folder_organization_schema(db: Session):
+    """
+    Migrate database schema to support folder organization feature
+    Adds folder_organization_mode column to users table
+    """
+    engine = db.get_bind()
+    
+    logger.info("Starting folder organization schema migration...")
+    
+    # Add folder_organization_mode column if it doesn't exist
+    if not column_exists(engine, 'users', 'folder_organization_mode'):
+        logger.info("Adding folder_organization_mode column to users table...")
+        db.execute(text("""
+            ALTER TABLE users 
+            ADD COLUMN folder_organization_mode VARCHAR(50) DEFAULT 'root' NOT NULL
+        """))
+        db.commit()
+        logger.info("✓ Added folder_organization_mode column")
+    else:
+        logger.info("✓ folder_organization_mode column already exists")
+    
+    logger.info("Folder organization schema migration completed successfully!")
+    
+    return {
+        "success": True,
+        "message": "Folder organization schema migration completed"
+    }
+
+
+def migrate_thumbnails_to_local(db: Session):
+    """
+    Migrate thumbnail paths from URL to local file paths
+    Scans all files and updates thumbnail field to use local file if it exists
+    """
+    import os
+    from pathlib import Path
+    
+    logger.info("Starting thumbnail migration to local files...")
+    
+    DOWNLOADS_DIR = "/app/downloads"
+    
+    # Get all files with URL thumbnails (starts with http)
+    result = db.execute(text("""
+        SELECT id, filename, thumbnail 
+        FROM downloaded_files 
+        WHERE thumbnail IS NOT NULL 
+        AND (thumbnail LIKE 'http%' OR thumbnail LIKE 'https%')
+    """)).fetchall()
+    
+    if not result:
+        logger.info("✓ No files with URL thumbnails found")
+        return {
+            "success": True,
+            "migrated_count": 0,
+            "message": "No thumbnails to migrate"
+        }
+    
+    logger.info(f"Found {len(result)} files with URL thumbnails")
+    
+    migrated_count = 0
+    for file_row in result:
+        file_id, filename, thumbnail_url = file_row
+        
+        try:
+            # Get full path of the video file
+            full_path = os.path.join(DOWNLOADS_DIR, filename)
+            
+            if not os.path.exists(full_path):
+                logger.warning(f"File not found: {full_path}")
+                continue
+            
+            # Check for local thumbnail file
+            video_stem = os.path.splitext(full_path)[0]
+            thumbnail_extensions = ['.webp', '.jpg', '.jpeg', '.png', '.gif']
+            
+            local_thumbnail = None
+            for thumb_ext in thumbnail_extensions:
+                potential_thumb = video_stem + thumb_ext
+                if os.path.exists(potential_thumb):
+                    local_thumbnail = os.path.relpath(potential_thumb, DOWNLOADS_DIR)
+                    break
+            
+            if local_thumbnail:
+                # Update database with local thumbnail path
+                db.execute(text("""
+                    UPDATE downloaded_files 
+                    SET thumbnail = :thumbnail 
+                    WHERE id = :file_id
+                """), {"thumbnail": local_thumbnail, "file_id": file_id})
+                
+                migrated_count += 1
+                logger.info(f"✓ Migrated thumbnail for file {file_id}: {local_thumbnail}")
+            else:
+                logger.debug(f"No local thumbnail found for file {file_id}")
+        
+        except Exception as e:
+            logger.warning(f"Failed to migrate thumbnail for file {file_id}: {e}")
+            continue
+    
+    db.commit()
+    logger.info(f"Thumbnail migration completed! Migrated {migrated_count} files")
+    
+    return {
+        "success": True,
+        "migrated_count": migrated_count,
+        "total_checked": len(result),
+        "message": f"Migrated {migrated_count} thumbnails to local files"
+    }
+
+
 def migrate_role_permissions_schema(db: Session):
     """
     Migrate database schema to support role-based default permissions
@@ -724,3 +834,43 @@ def migrate_role_permissions_schema(db: Session):
         "success": True,
         "message": "Role permissions schema migration completed"
     }
+
+
+def migrate_clear_deleted_user_display_names(db: Session):
+    """
+    Clear display_name for all deleted users (is_active=0) to prevent nickname conflicts
+    This allows other users to reuse nicknames from deleted accounts
+    """
+    logger.info("Starting deleted user display name cleanup migration...")
+    
+    try:
+        # Clear display_name for all inactive users
+        result = db.execute(text("""
+            UPDATE users 
+            SET display_name = NULL 
+            WHERE is_active = 0 AND display_name IS NOT NULL
+        """))
+        db.commit()
+        
+        cleared_count = result.rowcount
+        
+        if cleared_count > 0:
+            logger.info(f"✓ Cleared display_name for {cleared_count} deleted users")
+        else:
+            logger.info("✓ No deleted users with display_name found")
+        
+        logger.info("Deleted user display name cleanup migration completed successfully!")
+        
+        return {
+            "success": True,
+            "cleared_count": cleared_count,
+            "message": f"Cleared display_name for {cleared_count} deleted users"
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear deleted user display names: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to clear deleted user display names"
+        }

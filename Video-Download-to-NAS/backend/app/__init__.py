@@ -1,5 +1,3 @@
 """
-Video Download to NAS - Backend Application
+API Routers
 """
-
-__version__ = "1.1.5"

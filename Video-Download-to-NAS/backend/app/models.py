@@ -47,6 +47,9 @@ class LibraryQuery(BaseModel):
     sort_by: Literal["created_at", "filename", "file_size"] = "created_at"
     sort_order: Literal["asc", "desc"] = "desc"
 
+class FileRenameRequest(BaseModel):
+    new_filename: str
+
 class APITokenCreate(BaseModel):
     name: str
     
@@ -257,3 +260,31 @@ class TelegramBotTestResponse(BaseModel):
     bot_username: Optional[str] = None
     bot_name: Optional[str] = None
     error: Optional[str] = None
+
+# Folder Organization Models
+class FolderOrganizationUpdate(BaseModel):
+    """폴더 구성 모드 업데이트 요청"""
+    mode: Literal[
+        "root",              # 루트 폴더 (username/)
+        "date",              # 날짜 폴더 (username/2024-12-04/)
+        "site_full",         # 전체 도메인 (username/example.com/)
+        "site_name",         # 도메인명 (username/example/)
+        "date_site_full",    # 날짜 + 전체 도메인 (username/2024-12-04/example.com/)
+        "date_site_name",    # 날짜 + 도메인명 (username/2024-12-04/example/)
+        "site_full_date",    # 전체 도메인 + 날짜 (username/example.com/2024-12-04/)
+        "site_name_date"     # 도메인명 + 날짜 (username/example/2024-12-04/)
+    ]
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "mode": "site_full_date"
+            }
+        }
+
+class FolderOrganizationResponse(BaseModel):
+    """폴더 구성 모드 응답"""
+    mode: str
+    
+    class Config:
+        from_attributes = True

@@ -76,6 +76,9 @@ class User(Base):
     # Telegram Bot permission
     can_use_telegram_bot = Column(Integer, default=0, nullable=False)  # 0 = use role default, 1 = allowed, 2 = denied
     
+    # Folder organization mode
+    folder_organization_mode = Column(String, default='root', nullable=False)  # root, date, site_full, site_name, date_site_full, date_site_name, site_full_date, site_name_date
+    
     # Relationships
     files = relationship("DownloadedFile", back_populates="user", cascade="all, delete-orphan")
     share_tokens = relationship("ShareToken", back_populates="user", cascade="all, delete-orphan")
