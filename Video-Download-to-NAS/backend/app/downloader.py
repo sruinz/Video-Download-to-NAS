@@ -330,6 +330,9 @@ async def download_video(
         # Use local thumbnail path if found, otherwise use URL from yt-dlp
         thumbnail_value = local_thumbnail if local_thumbnail else result.get('thumbnail')
         
+        # Extract metadata
+        metadata = result.get('metadata', {})
+        
         # Update existing file or create new one
         if should_update:
             # Update existing record
@@ -338,6 +341,12 @@ async def download_video(
             existing_file.file_size = result.get('filesize')
             existing_file.thumbnail = thumbnail_value
             existing_file.duration = result.get('duration')
+            # Update metadata fields
+            existing_file.resolution = metadata.get('resolution')
+            existing_file.video_codec = metadata.get('video_codec')
+            existing_file.audio_codec = metadata.get('audio_codec')
+            existing_file.bitrate = metadata.get('bitrate')
+            existing_file.framerate = metadata.get('framerate')
             file_info = existing_file
         else:
             # Create new record
@@ -349,6 +358,11 @@ async def download_video(
                 file_size=result.get('filesize'),
                 thumbnail=thumbnail_value,
                 duration=result.get('duration'),
+                resolution=metadata.get('resolution'),
+                video_codec=metadata.get('video_codec'),
+                audio_codec=metadata.get('audio_codec'),
+                bitrate=metadata.get('bitrate'),
+                framerate=metadata.get('framerate'),
                 user_id=user_id
             )
             db.add(file_info)
@@ -485,12 +499,58 @@ def _download_with_ydl(ydl_opts: dict, url: str) -> dict:
         if os.path.exists(actual_filename):
             filesize = os.path.getsize(actual_filename)
         
+        # Extract metadata from yt-dlp info
+        metadata = {}
+        
+        # Resolution
+        if info.get('height'):
+            metadata['resolution'] = f"{info.get('height')}p"
+        
+        # Video codec
+        if info.get('vcodec') and info.get('vcodec') != 'none':
+            vcodec = info.get('vcodec')
+            # Simplify codec name (e.g., "avc1.640028" -> "h264")
+            if 'avc' in vcodec.lower() or 'h264' in vcodec.lower():
+                metadata['video_codec'] = 'h264'
+            elif 'vp9' in vcodec.lower():
+                metadata['video_codec'] = 'vp9'
+            elif 'av01' in vcodec.lower() or 'av1' in vcodec.lower():
+                metadata['video_codec'] = 'av1'
+            elif 'hevc' in vcodec.lower() or 'h265' in vcodec.lower():
+                metadata['video_codec'] = 'h265'
+            else:
+                metadata['video_codec'] = vcodec.split('.')[0]
+        
+        # Audio codec
+        if info.get('acodec') and info.get('acodec') != 'none':
+            acodec = info.get('acodec')
+            # Simplify codec name
+            if 'mp4a' in acodec.lower():
+                metadata['audio_codec'] = 'aac'
+            elif 'opus' in acodec.lower():
+                metadata['audio_codec'] = 'opus'
+            elif 'mp3' in acodec.lower():
+                metadata['audio_codec'] = 'mp3'
+            elif 'vorbis' in acodec.lower():
+                metadata['audio_codec'] = 'vorbis'
+            else:
+                metadata['audio_codec'] = acodec.split('.')[0]
+        
+        # Bitrate (total bitrate in kbps)
+        if info.get('tbr'):
+            metadata['bitrate'] = f"{int(info.get('tbr'))}k"
+        
+        # Framerate
+        if info.get('fps'):
+            metadata['framerate'] = str(int(info.get('fps')))
+        
         return {
             'filename': actual_filename,
             'filesize': filesize,
             'thumbnail': info.get('thumbnail'),
             'duration': info.get('duration'),
-            'title': info.get('title')
+            'title': info.get('title'),
+            'metadata': metadata
         }
 
 async def generate_video_thumbnail(video_path: str, output_dir: str) -> Optional[str]:

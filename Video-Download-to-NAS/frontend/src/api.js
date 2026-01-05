@@ -866,3 +866,20 @@ export const updateFolderOrganization = async (mode) => {
   
   return response.json();
 };
+
+// === Video Metadata ===
+export const startMetadataMigration = async (forceReextract = false) => {
+  const response = await fetch(`/api/admin/metadata/migrate?force_reextract=${forceReextract}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to start metadata migration');
+  }
+  
+  return response.json();
+};

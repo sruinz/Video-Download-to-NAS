@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Users, HardDrive, Activity, RefreshCw, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Users, HardDrive, Activity, RefreshCw, Shield, Film } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { getSettings, updateSettings, getSystemStats, listUsers, syncLibrary, getAllUsers } from '../api';
+import { getSettings, updateSettings, getSystemStats, listUsers, syncLibrary, getAllUsers, startMetadataMigration } from '../api';
 import showToast from '../utils/toast';
 import UserManagement from '../components/UserManagement';
 import UserProfileMenu from '../components/UserProfileMenu';
@@ -19,6 +19,8 @@ export default function Settings({ onBack, currentUser, onLogout, onOpenShareLin
   const [syncing, setSyncing] = useState(false);
   const [users, setUsers] = useState([]);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [forceReextract, setForceReextract] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -73,6 +75,23 @@ export default function Settings({ onBack, currentUser, onLogout, onOpenShareLin
       showToast.error(t('settings.librarySync.failed') + ': ' + error.message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleStartMigration = async () => {
+    if (isMigrating) return;
+    
+    try {
+      setIsMigrating(true);
+      const result = await startMetadataMigration(forceReextract);
+      showToast.success(t('settings.metadata.migrationStarted', { 
+        count: result.pending_files 
+      }));
+    } catch (error) {
+      console.error('Failed to start migration:', error);
+      showToast.error(t('settings.metadata.migrationFailed'));
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -550,6 +569,48 @@ export default function Settings({ onBack, currentUser, onLogout, onOpenShareLin
                 >
                   <Shield className="w-5 h-5" />
                   {t('rolePermissions.manage')}
+                </button>
+              </div>
+            )}
+
+            {/* Video Metadata Extraction - Super Admin Only */}
+            {currentUser.role === 'super_admin' && (
+              <div className="bg-yt-light p-6 rounded-lg">
+                <h2 className="text-xl font-bold mb-4">{t('settings.metadata.title')}</h2>
+                
+                <p className="text-gray-400 mb-4">
+                  {t('settings.metadata.description')}
+                </p>
+                
+                <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-blue-200">
+                    💡 {t('settings.metadata.info')}
+                  </p>
+                </div>
+                
+                {/* Force Re-extract Checkbox */}
+                <div className="mb-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={forceReextract}
+                      onChange={(e) => setForceReextract(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-600 bg-yt-dark text-yt-red focus:ring-2 focus:ring-yt-red focus:ring-offset-0"
+                    />
+                    <div>
+                      <span className="text-white font-medium">{t('settings.metadata.forceReextract')}</span>
+                      <p className="text-sm text-gray-400 mt-1">{t('settings.metadata.forceReextractHint')}</p>
+                    </div>
+                  </label>
+                </div>
+                
+                <button
+                  onClick={handleStartMigration}
+                  disabled={isMigrating}
+                  className="flex items-center gap-2 px-6 py-3 bg-yt-red hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-semibold"
+                >
+                  <Film className="w-5 h-5" />
+                  {isMigrating ? t('settings.metadata.migrating') : t('settings.metadata.startButton')}
                 </button>
               </div>
             )}

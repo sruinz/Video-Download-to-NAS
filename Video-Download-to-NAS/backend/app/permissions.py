@@ -3,8 +3,10 @@ Permission management system
 Handles role-based and user-specific permissions
 """
 
+from fastapi import HTTPException, Depends
 from sqlalchemy.orm import Session
 from .database import User, SystemSetting, RolePermissions
+from .auth import get_current_user
 
 # Permission values
 PERMISSION_USE_ROLE_DEFAULT = 0
@@ -155,3 +157,34 @@ def get_role_permissions(db: Session, role: str) -> dict:
     
     # Fallback to hardcoded defaults
     return FALLBACK_ROLE_PERMISSIONS.get(role, FALLBACK_ROLE_PERMISSIONS['guest']).copy()
+
+
+def require_role(allowed_roles: list):
+    """
+    Dependency to require specific roles for an endpoint.
+    
+    Usage:
+        @router.get("/admin-only")
+        async def admin_endpoint(
+            current_user: User = Depends(require_role(["super_admin", "admin"]))
+        ):
+            ...
+    
+    Args:
+        allowed_roles: List of role names that are allowed
+    
+    Returns:
+        Dependency function that checks user role
+    
+    Raises:
+        HTTPException: 403 if user role not in allowed_roles
+    """
+    async def role_checker(current_user: User = Depends(get_current_user)):
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
+            )
+        return current_user
+    
+    return role_checker

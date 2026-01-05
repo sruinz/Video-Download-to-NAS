@@ -1,6 +1,6 @@
 # Video Download to NAS
 
-[한국어](./README.ko.md) | **English** | [Wiki](https://github.com/sruinz/Video-Download-to-NAS/wiki)
+[한국어](./README.ko.md) | **English**
 
 ![Project Status](https://img.shields.io/badge/status-personal%20use-blue)
 ![Maintenance](https://img.shields.io/badge/maintenance-as--needed-yellow)
@@ -46,6 +46,8 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 - 🎥 **Download videos** from 1000+ supported sites (powered by yt-dlp)
 - 🎵 **Extract audio** in M4A or MP3 format
 - 📝 **Download subtitles** in multiple languages (SRT, VTT)
+- ✏️ **Rename files** with security validation and auto-extension preservation
+- 📊 **Video metadata display** - view detailed information (resolution, codecs, bitrate, framerate)
 - 🎨 **Beautiful UI** with modern dark theme
 - 🔐 **Secure authentication** with JWT tokens and SSO support
 - 📱 **Responsive design** works on all devices
@@ -121,60 +123,6 @@ By default, downloads are saved to `./downloads`. You can change this in `docker
 volumes:
   - /path/to/your/nas/folder:/app/downloads
 ```
-
-### Folder Organization
-
-Customize how your downloaded files are organized! Choose from multiple folder structure options in **Account Settings**.
-
-#### Available Folder Modes
-
-1. **Root** (Default)
-   - Files saved directly in your user folder
-   - Example: `username/video.mp4`
-
-2. **Site (Full Domain)**
-   - Organized by complete domain name
-   - Example: `username/example.com/video.mp4`
-
-3. **Site (Name Only)**
-   - Organized by domain name without extension
-   - Example: `username/example/video.mp4`
-
-4. **Root + Date**
-   - Organized by download date
-   - Example: `username/2025-12-04/video.mp4`
-
-5. **Site (Full Domain) + Date**
-   - Organized by domain and date
-   - Example: `username/example.com/2025-12-04/video.mp4`
-
-6. **Site (Name Only) + Date**
-   - Organized by domain name and date
-   - Example: `username/example/2025-12-04/video.mp4`
-
-#### How to Change Folder Organization
-
-1. Log in to the web interface
-2. Click your profile icon > **Account Settings**
-3. Find the **Folder Organization** section
-4. Select your preferred mode from the dropdown
-5. Click **Save Changes**
-
-#### Important Notes
-
-- ✅ **Existing files remain unchanged** - Only new downloads use the new setting
-- ✅ **Per-user setting** - Each user can have their own folder structure
-- ✅ **Works with all download methods** - Web UI, browser extension, and Telegram bot
-- ✅ **Automatic folder creation** - Folders are created automatically as needed
-- 📅 **Date format** - Uses YYYY-MM-DD format in Asia/Seoul timezone
-
-#### Migration Behavior
-
-When you change your folder organization setting:
-- **Old files stay where they are** - No files are moved or renamed
-- **New downloads use the new structure** - Applied immediately to subsequent downloads
-- **Library shows all files** - Regardless of their folder location
-- **File operations work normally** - Delete, share, and play work with all files
 
 ## 🔌 Browser Extension Setup
 
@@ -326,55 +274,6 @@ Content-Type: application/json
 - Audio: `audio-m4a`, `audio-mp3`
 - Subtitles: `srt|ko`, `srt|en`, `srt|ja`, `vtt|ko`, `vtt|en`, `vtt|ja`
 
-### Folder Organization Settings
-
-**Get Current Folder Organization**
-```http
-GET /api/users/me/folder-organization
-Authorization: Bearer <token>
-```
-
-Response:
-```json
-{
-  "folder_organization_mode": "root"
-}
-```
-
-**Update Folder Organization**
-```http
-PATCH /api/users/me/folder-organization
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "mode": "site_full_date"
-}
-```
-
-Response:
-```json
-{
-  "message": "Folder organization updated successfully",
-  "folder_organization_mode": "site_full_date"
-}
-```
-
-**Valid Folder Modes:**
-- `root` - Files in user root folder (default)
-- `site_full` - Organized by full domain (e.g., example.com)
-- `site_name` - Organized by domain name only (e.g., example)
-- `root_date` - Organized by date (YYYY-MM-DD)
-- `site_full_date` - Organized by full domain + date
-- `site_name_date` - Organized by domain name + date
-
-**Error Response (Invalid Mode):**
-```json
-{
-  "detail": "Invalid folder mode. Must be one of: root, site_full, site_name, root_date, site_full_date, site_name_date"
-}
-```
-
 ## 🛠️ Development
 
 ### Run Locally
@@ -460,3 +359,9 @@ If you believe this tool is being misused or have legal concerns, please contact
 
 
 ---
+
+## ☕ Support
+
+If this project helped you, buy me a coffee!
+
+<a href="https://www.buymeacoffee.com/sruinz" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

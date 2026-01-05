@@ -101,6 +101,14 @@ class DownloadedFile(Base):
     file_size = Column(BigInteger, nullable=True)
     thumbnail = Column(String, nullable=True)
     duration = Column(Integer, nullable=True)  # in seconds
+    
+    # Video metadata fields
+    resolution = Column(String, nullable=True)      # "1080p", "720p", etc.
+    video_codec = Column(String, nullable=True)     # "h264", "vp9", "av1", etc.
+    audio_codec = Column(String, nullable=True)     # "aac", "opus", "mp3", etc.
+    bitrate = Column(String, nullable=True)         # "2500k", "5000k", etc.
+    framerate = Column(String, nullable=True)       # "30", "60", etc.
+    
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
     

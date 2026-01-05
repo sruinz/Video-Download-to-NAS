@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Download as DownloadIcon, Trash2, FileVideo, FileAudio, FileText, ExternalLink, Globe, Link as LinkIcon, Edit2 } from 'lucide-react';
+import { Play, Download as DownloadIcon, Trash2, FileVideo, FileAudio, FileText, ExternalLink, Globe, Link as LinkIcon, Edit2, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { deleteFile, getFileUrl, publishFileToBoard, unpublishFileFromBoard, renameFile } from '../api';
 import showToast from '../utils/toast';
@@ -220,6 +220,14 @@ export default function VideoGrid({ files, onFileDeleted, onFileUpdated, current
               getFileIcon(file.file_type)
             )}
 
+            {/* Resolution badge */}
+            {file.file_type === 'video' && file.resolution && (
+              <div className="absolute top-2 right-2 bg-black/80 px-2 py-1 rounded text-xs font-semibold">
+                {file.resolution}
+              </div>
+            )}
+
+            {/* Duration badge */}
             {file.duration && (
               <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs font-semibold">
                 {formatDuration(file.duration)}
@@ -269,6 +277,13 @@ export default function VideoGrid({ files, onFileDeleted, onFileUpdated, current
             {/* Action buttons row */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-700">
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => openModal('videoInfo', { file })}
+                  className="p-1.5 text-gray-400 hover:bg-gray-600/20 rounded transition-colors"
+                  title={t('file.info')}
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => handleRename(file)}
                   className="p-1.5 text-gray-400 hover:bg-gray-600/20 rounded transition-colors"

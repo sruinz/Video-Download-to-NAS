@@ -5,6 +5,7 @@ import VideoPlayerModal from '../components/modals/VideoPlayerModal';
 import UserManagementModal from '../components/modals/UserManagementModal';
 import PublishFileModal from '../components/modals/PublishFileModal';
 import CreateShareLinkModal from '../components/modals/CreateShareLinkModal';
+import VideoInfoModal from '../components/modals/VideoInfoModal';
 
 const ModalContext = createContext(null);
 
@@ -18,7 +19,7 @@ export const useModal = () => {
 
 export const ModalProvider = ({ children }) => {
   const [modalState, setModalState] = useState({
-    type: null, // 'input' | 'confirm' | 'video' | 'audio' | 'userManagement' | 'publishFile'
+    type: null, // 'input' | 'confirm' | 'video' | 'audio' | 'userManagement' | 'publishFile' | 'createShareLink' | 'videoInfo'
     config: null,
     file: null,
     playlist: null,
@@ -179,6 +180,12 @@ export const ModalProvider = ({ children }) => {
           isOpen={true}
           file={modalState.file}
           currentUser={modalState.config?.currentUser}
+          onClose={closeModal}
+        />
+      )}
+      {modalState.type === 'videoInfo' && modalState.file && (
+        <VideoInfoModal
+          file={modalState.file}
           onClose={closeModal}
         />
       )}

@@ -23,7 +23,7 @@ from .auth import (
     verify_token
 )
 from .downloader import download_video, get_download_status
-from .routers import users, settings, share_links, public_board, sso, sso_admin, api_tokens, telegram_bot, role_permissions, version
+from .routers import users, settings, share_links, public_board, sso, sso_admin, api_tokens, telegram_bot, role_permissions, version, admin_metadata
 from .websocket_manager import manager as ws_manager
 from .library_sync import sync_user_library, sync_all_libraries
 
@@ -44,6 +44,7 @@ app.include_router(api_tokens.router)
 app.include_router(telegram_bot.router)
 app.include_router(role_permissions.router)
 app.include_router(version.router)
+app.include_router(admin_metadata.router)
 
 
 # === Thumbnail Endpoint ===
@@ -261,6 +262,15 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Deleted user display name cleanup error: {e}")
         print(f"⚠️  Deleted user display name cleanup warning: {e}")
+    
+    # Run video metadata schema migration
+    try:
+        from .migrations import migrate_video_metadata_schema
+        result = migrate_video_metadata_schema(db)
+        print(f"✅ Video metadata schema migration completed: {result['added_columns']} columns added")
+    except Exception as e:
+        logger.error(f"Video metadata migration error: {e}")
+        print(f"⚠️  Video metadata migration warning: {e}")
     
     # Start SSO state cleanup scheduler
     try:

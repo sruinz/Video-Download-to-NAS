@@ -161,6 +161,7 @@
     "download": "Download",
     "delete": "Delete",
     "rename": "Rename",
+    "info": "Info",
     "openOriginal": "Open Original Video",
     "video": "video",
     "audio": "audio",
@@ -314,6 +315,17 @@
         "message": "This will scan download folders and register files to database. Continue?",
         "allUsersWarning": "This will scan all user folders. It may take a while."
       }
+    },
+    "metadata": {
+      "title": "Video Metadata Extraction",
+      "description": "Extract resolution information from existing video files. This process runs in the background and may take time if you have many files.",
+      "info": "This feature only processes video files without resolution information. You can run it multiple times - already processed files will be skipped.",
+      "forceReextract": "Overwrite existing metadata",
+      "forceReextractHint": "When checked, re-extract metadata for ALL video files (useful for fixing incorrect metadata)",
+      "startButton": "Start Metadata Extraction",
+      "migrating": "Extracting...",
+      "migrationStarted": "Metadata extraction started. Processing {{count}} files.",
+      "migrationFailed": "Failed to start metadata extraction."
     },
     "users": {
       "editUser": "Edit User",
@@ -1010,5 +1022,21 @@
     "version": "Version",
     "updateAvailable": "Update Available",
     "checkFailed": "Update check failed"
+  },
+  "videoInfo": {
+    "title": "Video Information",
+    "filename": "Filename",
+    "basicInfo": "Basic Information",
+    "fileType": "File Type",
+    "fileSize": "File Size",
+    "duration": "Duration",
+    "videoMetadata": "Video Metadata",
+    "resolution": "Resolution",
+    "videoCodec": "Video Codec",
+    "framerate": "Frame Rate",
+    "audioMetadata": "Audio Metadata",
+    "audioCodec": "Audio Codec",
+    "bitrate": "Bitrate",
+    "originalUrl": "Original URL"
   }
 }

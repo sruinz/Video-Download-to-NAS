@@ -1,6 +1,6 @@
 # Video Download to NAS
 
-**한국어** | [English](./README.md) | [위키](https://github.com/sruinz/Video-Download-to-NAS/wiki/Home_ko)
+**한국어** | [English](./README.md)
 
 ![프로젝트 상태](https://img.shields.io/badge/status-personal%20use-blue)
 ![유지보수](https://img.shields.io/badge/maintenance-as--needed-yellow)
@@ -46,6 +46,8 @@
 - 🎥 **비디오 다운로드** - 1000개 이상의 사이트 지원 (yt-dlp 기반)
 - 🎵 **오디오 추출** - M4A 또는 MP3 형식
 - 📝 **자막 다운로드** - 다국어 지원 (SRT, VTT)
+- ✏️ **파일 이름 변경** - 보안 검증 및 확장자 자동 보존
+- 📊 **비디오 메타데이터 표시** - 상세 정보 확인 (해상도, 코덱, 비트레이트, 프레임레이트)
 - 🎨 **아름다운 UI** - 모던 다크 테마
 - 🔐 **보안 인증** - JWT 토큰 및 SSO 지원
 - 📱 **반응형 디자인** - 모든 기기에서 작동
@@ -120,60 +122,6 @@ ALLOWED_ORIGINS=*
 volumes:
   - /path/to/your/nas/folder:/app/downloads
 ```
-
-### 폴더 구성
-
-다운로드한 파일을 원하는 방식으로 정리하세요! **계정 설정**에서 다양한 폴더 구조 옵션을 선택할 수 있습니다.
-
-#### 사용 가능한 폴더 모드
-
-1. **루트** (기본값)
-   - 사용자 폴더에 직접 저장
-   - 예시: `username/video.mp4`
-
-2. **사이트 (전체 도메인)**
-   - 전체 도메인명으로 구성
-   - 예시: `username/example.com/video.mp4`
-
-3. **사이트 (이름만)**
-   - 확장자를 제외한 도메인명으로 구성
-   - 예시: `username/example/video.mp4`
-
-4. **루트 + 날짜**
-   - 다운로드 날짜별로 구성
-   - 예시: `username/2025-12-04/video.mp4`
-
-5. **사이트 (전체 도메인) + 날짜**
-   - 도메인과 날짜로 구성
-   - 예시: `username/example.com/2025-12-04/video.mp4`
-
-6. **사이트 (이름만) + 날짜**
-   - 도메인명과 날짜로 구성
-   - 예시: `username/example/2025-12-04/video.mp4`
-
-#### 폴더 구성 변경 방법
-
-1. 웹 인터페이스에 로그인
-2. 프로필 아이콘 클릭 > **계정 설정**
-3. **폴더 구성** 섹션 찾기
-4. 드롭다운에서 원하는 모드 선택
-5. **변경사항 저장** 클릭
-
-#### 중요 사항
-
-- ✅ **기존 파일은 변경되지 않음** - 새 다운로드만 새 설정 적용
-- ✅ **사용자별 설정** - 각 사용자가 자신만의 폴더 구조 설정 가능
-- ✅ **모든 다운로드 방법 지원** - 웹 UI, 브라우저 확장, 텔레그램 봇
-- ✅ **자동 폴더 생성** - 필요한 폴더가 자동으로 생성됨
-- 📅 **날짜 형식** - YYYY-MM-DD 형식 사용 (Asia/Seoul 타임존)
-
-#### 마이그레이션 동작
-
-폴더 구성 설정을 변경하면:
-- **기존 파일은 그대로 유지** - 파일이 이동하거나 이름이 변경되지 않음
-- **새 다운로드는 새 구조 사용** - 이후 다운로드에 즉시 적용
-- **라이브러리에 모든 파일 표시** - 폴더 위치와 관계없이 모두 표시
-- **파일 작업 정상 동작** - 삭제, 공유, 재생이 모든 파일에서 작동
 
 ## 🔌 브라우저 확장 프로그램 설정
 
@@ -296,55 +244,6 @@ Content-Type: application/json
 - 오디오: `audio-m4a`, `audio-mp3`
 - 자막: `srt|ko`, `srt|en`, `srt|ja`, `vtt|ko`, `vtt|en`, `vtt|ja`
 
-### 폴더 구성 설정
-
-**현재 폴더 구성 조회**
-```http
-GET /api/users/me/folder-organization
-Authorization: Bearer <token>
-```
-
-응답:
-```json
-{
-  "folder_organization_mode": "root"
-}
-```
-
-**폴더 구성 업데이트**
-```http
-PATCH /api/users/me/folder-organization
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "mode": "site_full_date"
-}
-```
-
-응답:
-```json
-{
-  "message": "Folder organization updated successfully",
-  "folder_organization_mode": "site_full_date"
-}
-```
-
-**유효한 폴더 모드:**
-- `root` - 사용자 루트 폴더에 파일 저장 (기본값)
-- `site_full` - 전체 도메인으로 구성 (예: example.com)
-- `site_name` - 도메인명만으로 구성 (예: example)
-- `root_date` - 날짜별로 구성 (YYYY-MM-DD)
-- `site_full_date` - 전체 도메인 + 날짜로 구성
-- `site_name_date` - 도메인명 + 날짜로 구성
-
-**에러 응답 (잘못된 모드):**
-```json
-{
-  "detail": "Invalid folder mode. Must be one of: root, site_full, site_name, root_date, site_full_date, site_name_date"
-}
-```
-
 ## 🛠️ 개발
 
 ### 로컬 실행
@@ -429,3 +328,9 @@ MIT License
 
 
 ---
+
+## ☕ 후원
+
+이 프로젝트가 도움이 되셨다면 커피 한 잔 사주세요!
+
+<a href="https://www.buymeacoffee.com/sruinz" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

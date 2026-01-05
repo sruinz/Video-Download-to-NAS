@@ -76,6 +76,14 @@ class FileInfo(BaseModel):
     file_size: Optional[int] = None
     thumbnail: Optional[str] = None
     duration: Optional[int] = None
+    
+    # Video metadata fields
+    resolution: Optional[str] = None
+    video_codec: Optional[str] = None
+    audio_codec: Optional[str] = None
+    bitrate: Optional[str] = None
+    framerate: Optional[str] = None
+    
     is_public: Optional[int] = 0
     created_at: datetime
 

@@ -874,3 +874,50 @@ def migrate_clear_deleted_user_display_names(db: Session):
             "error": str(e),
             "message": "Failed to clear deleted user display names"
         }
+
+
+def migrate_video_metadata_schema(db: Session):
+    """
+    Migrate database schema to support video metadata display
+    Adds metadata columns to downloaded_files table
+    This function is idempotent and can be run multiple times safely
+    """
+    engine = db.get_bind()
+    
+    logger.info("Starting video metadata schema migration...")
+    
+    # Metadata columns to add (all TEXT, nullable)
+    metadata_columns = {
+        'resolution': 'TEXT',      # "1080p", "720p", etc.
+        'video_codec': 'TEXT',     # "h264", "vp9", "av1", etc.
+        'audio_codec': 'TEXT',     # "aac", "opus", "mp3", etc.
+        'bitrate': 'TEXT',         # "2500k", "5000k", etc.
+        'framerate': 'TEXT'        # "30", "60", etc.
+    }
+    
+    # Check which columns exist
+    result = db.execute(text("PRAGMA table_info(downloaded_files)"))
+    existing_columns = [row[1] for row in result]
+    
+    # Add missing columns
+    added_count = 0
+    for column_name, column_type in metadata_columns.items():
+        if column_name not in existing_columns:
+            logger.info(f"Adding {column_name} column to downloaded_files table...")
+            db.execute(text(f"""
+                ALTER TABLE downloaded_files 
+                ADD COLUMN {column_name} {column_type}
+            """))
+            db.commit()
+            logger.info(f"✓ Added {column_name} column")
+            added_count += 1
+        else:
+            logger.info(f"✓ {column_name} column already exists")
+    
+    logger.info("Video metadata schema migration completed successfully!")
+    
+    return {
+        "success": True,
+        "added_columns": added_count,
+        "message": f"Video metadata schema migration completed ({added_count} columns added)"
+    }

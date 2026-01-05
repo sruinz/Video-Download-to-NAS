@@ -45,19 +45,69 @@ async def extract_video_metadata(file_path: str) -> Dict:
                 except (ValueError, TypeError):
                     pass
             
+            # Extract video stream metadata
+            resolution = None
+            video_codec = None
+            framerate = None
+            audio_codec = None
+            bitrate = None
+            
+            if 'streams' in data:
+                for stream in data['streams']:
+                    # Video stream
+                    if stream.get('codec_type') == 'video':
+                        # Resolution
+                        width = stream.get('width')
+                        height = stream.get('height')
+                        if width and height:
+                            resolution = f"{width}x{height}"
+                        
+                        # Video codec
+                        video_codec = stream.get('codec_name')
+                        
+                        # Framerate
+                        fps_str = stream.get('r_frame_rate', '0/0')
+                        try:
+                            num, den = map(int, fps_str.split('/'))
+                            if den > 0:
+                                framerate = round(num / den, 2)
+                        except:
+                            pass
+                    
+                    # Audio stream
+                    elif stream.get('codec_type') == 'audio':
+                        audio_codec = stream.get('codec_name')
+            
+            # Bitrate from format
+            if 'format' in data and 'bit_rate' in data['format']:
+                try:
+                    bitrate = int(data['format']['bit_rate'])
+                except (ValueError, TypeError):
+                    pass
+            
             # Get file size
             file_size = os.path.getsize(file_path)
             
             return {
                 'duration': duration,
-                'file_size': file_size
+                'file_size': file_size,
+                'resolution': resolution,
+                'video_codec': video_codec,
+                'audio_codec': audio_codec,
+                'framerate': framerate,
+                'bitrate': bitrate
             }
     except Exception as e:
         print(f"[Metadata] Error extracting metadata: {e}")
     
     return {
         'duration': None,
-        'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else None
+        'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else None,
+        'resolution': None,
+        'video_codec': None,
+        'audio_codec': None,
+        'framerate': None,
+        'bitrate': None
     }
 
 
@@ -266,6 +316,11 @@ async def sync_user_library(
                     file_size=metadata['file_size'],
                     thumbnail=thumbnail_path,
                     duration=metadata['duration'],
+                    resolution=metadata.get('resolution'),
+                    video_codec=metadata.get('video_codec'),
+                    audio_codec=metadata.get('audio_codec'),
+                    bitrate=metadata.get('bitrate'),
+                    framerate=metadata.get('framerate'),
                     user_id=user_id
                 )
                 
