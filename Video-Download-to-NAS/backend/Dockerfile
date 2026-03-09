@@ -5,7 +5,12 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install deno (JavaScript runtime for yt-dlp YouTube signature decryption)
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 
 # Copy VERSION file from server root
 COPY VERSION ./VERSION
@@ -17,8 +22,8 @@ COPY backend/BUILD_TIME ./BUILD_TIME
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Upgrade yt-dlp to latest version
-RUN pip install --no-cache-dir --upgrade yt-dlp
+# Upgrade yt-dlp to latest version with EJS support
+RUN pip install --no-cache-dir --upgrade yt-dlp yt-dlp-ejs
 
 # Copy application code
 COPY backend/app ./app
