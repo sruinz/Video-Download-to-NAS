@@ -16,6 +16,14 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.8
+
+- Applies role-based download request limits, with user-specific limits taking precedence over role defaults
+- Runs download requests sequentially on the server
+- Provides response headers so clients can wait and retry after an HTTP 429 rate-limit response
+- Automatically retries after waiting 30 or 60 seconds when an origin server returns HTTP 429
+- Isolates working files for each request and preserves all result files from one request
+
 ## ⚠️ Legal Notice
 
 **This software is a TOOL for personal media archiving and backup purposes.**

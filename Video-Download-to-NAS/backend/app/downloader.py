@@ -1,8 +1,12 @@
 import yt_dlp
 import os
 import asyncio
+import re
+import shutil
 from typing import Dict, Optional
 from datetime import datetime
+from pathlib import Path
+from weakref import WeakKeyDictionary
 from sqlalchemy.orm import Session
 from .database import DownloadedFile
 
@@ -11,6 +15,175 @@ os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 # Global download status tracker
 download_status: Dict[str, dict] = {}
+RATE_LIMIT_RETRY_DELAYS = (30, 60)
+_download_execution_locks = WeakKeyDictionary()
+VIDEO_EXTENSIONS = frozenset({
+    '.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.3gp', '.m4v',
+    '.mpg', '.mpeg', '.ts', '.m2ts', '.f4v', '.ogv',
+})
+AUDIO_EXTENSIONS = frozenset({
+    '.mp3', '.m4a', '.opus', '.ogg', '.wav', '.flac', '.aac', '.wma',
+    '.alac', '.aiff',
+})
+SUBTITLE_EXTENSIONS = frozenset({
+    '.srt', '.vtt', '.ass', '.ssa', '.lrc', '.ttml', '.dfxp', '.srv1',
+    '.srv2', '.srv3', '.json3',
+})
+COMPLETED_DOWNLOAD_EXTENSIONS = (
+    VIDEO_EXTENSIONS | AUDIO_EXTENSIONS | SUBTITLE_EXTENSIONS
+)
+
+
+def _get_download_execution_lock() -> asyncio.Lock:
+    """현재 이벤트 루프에서 실제 다운로드를 하나씩 실행하는 잠금을 반환한다."""
+    loop = asyncio.get_running_loop()
+    execution_lock = _download_execution_locks.get(loop)
+    if execution_lock is None:
+        execution_lock = asyncio.Lock()
+        _download_execution_locks[loop] = execution_lock
+    return execution_lock
+
+
+async def _download_with_rate_limit_retry(
+    loop,
+    ydl_opts: dict,
+    url: str,
+    download_id: str,
+    logger,
+) -> dict:
+    """원본 서버의 429 응답만 정해진 간격으로 재시도한다."""
+    retry_index = 0
+    while True:
+        try:
+            return await loop.run_in_executor(
+                None,
+                lambda: _download_with_ydl(ydl_opts, url),
+            )
+        except Exception as error:
+            if "429" not in str(error) or retry_index >= len(RATE_LIMIT_RETRY_DELAYS):
+                raise
+
+            delay = RATE_LIMIT_RETRY_DELAYS[retry_index]
+            retry_index += 1
+            download_status[download_id].update({
+                'status': 'pending',
+                'progress': 0.0,
+                'error': f'원본 서버 요청 제한으로 {delay}초 후 재시도합니다.',
+            })
+            logger.warning(
+                "Source rate limit for %s; retry %s/%s in %s seconds",
+                download_id,
+                retry_index,
+                len(RATE_LIMIT_RETRY_DELAYS),
+                delay,
+            )
+            await asyncio.sleep(delay)
+            download_status[download_id].update({
+                'status': 'downloading',
+                'error': None,
+            })
+
+
+def _safe_output_filename(
+    requested_filename: Optional[str],
+    fallback_filename: str,
+    extension: str,
+) -> str:
+    """요청 파일명을 단일 안전한 파일명으로 정리한다."""
+    raw_name = requested_filename or fallback_filename
+    basename = str(raw_name).replace('\\', '/').rsplit('/', 1)[-1]
+    stem = Path(basename).stem if Path(basename).suffix else basename
+    stem = re.sub(r'[/\\:*?"<>|]', '_', stem).strip(' ._')
+    if not stem:
+        stem = Path(fallback_filename).stem or 'download'
+    return f"{stem[:180]}{extension}"
+
+
+def _available_output_path(
+    output_dir: str,
+    filename: str,
+    download_id: str,
+) -> Path:
+    """기존 파일을 덮어쓰지 않는 최종 경로를 반환한다."""
+    output_path = Path(output_dir) / filename
+    if not output_path.exists():
+        return output_path
+
+    suffix = output_path.suffix
+    stem = output_path.stem
+    candidate = output_path.with_name(f"{stem} ({download_id[:8]}){suffix}")
+    sequence = 2
+    while candidate.exists():
+        candidate = output_path.with_name(
+            f"{stem} ({download_id[:8]}-{sequence}){suffix}"
+        )
+        sequence += 1
+    return candidate
+
+
+def _move_download_to_output(
+    source_path: str,
+    output_dir: str,
+    requested_filename: Optional[str],
+    download_id: str,
+) -> str:
+    """격리된 작업 파일과 썸네일을 사용자 다운로드 폴더로 이동한다."""
+    source = Path(source_path)
+    filename = _safe_output_filename(
+        requested_filename,
+        source.name,
+        source.suffix,
+    )
+    destination = _available_output_path(output_dir, filename, download_id)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source.replace(destination)
+
+    source_stem = source.with_suffix('')
+    for thumbnail_extension in ['.webp', '.jpg', '.jpeg', '.png', '.gif']:
+        source_thumbnail = Path(f"{source_stem}{thumbnail_extension}")
+        if not source_thumbnail.exists():
+            continue
+        destination_thumbnail = destination.with_suffix(thumbnail_extension)
+        if destination_thumbnail.exists():
+            destination_thumbnail = destination.with_name(
+                f"{destination.stem}_{download_id[:8]}{thumbnail_extension}"
+            )
+        source_thumbnail.replace(destination_thumbnail)
+        break
+
+    return str(destination)
+
+
+def _collect_download_outputs(
+    staging_dir: str,
+    preferred_filename: str,
+    expected_extension: str,
+) -> list[Path]:
+    """완료된 실제 결과 파일을 주 결과부터 결정적인 순서로 반환한다."""
+    staging_root = Path(staging_dir)
+    expected_extension = expected_extension.lower()
+    preferred_path = Path(preferred_filename)
+    output_paths = sorted(
+        path
+        for path in staging_root.rglob('*')
+        if path.is_file()
+        and path.suffix.lower() in COMPLETED_DOWNLOAD_EXTENSIONS
+    )
+
+    if not output_paths:
+        raise FileNotFoundError(
+            '완료된 다운로드 결과 파일을 찾을 수 없습니다.'
+        )
+
+    output_paths.sort(
+        key=lambda path: (
+            path != preferred_path,
+            path.suffix.lower() != expected_extension,
+            str(path),
+        )
+    )
+
+    return output_paths
 
 def get_resolution_priority(resolution: str) -> int:
     """Get priority value for resolution (higher is better)"""
@@ -163,7 +336,8 @@ async def download_video(
     download_id: str,
     db: Session,
     user_id: int,
-    ws_manager = None
+    ws_manager = None,
+    requested_filename: Optional[str] = None,
 ) -> dict:
     """Download video using yt-dlp"""
     from .database import User
@@ -176,6 +350,9 @@ async def download_video(
     print(f"[Download] WebSocket manager available: {ws_manager is not None}")
     logger.info(f"Starting download: {download_id} for user {user_id}, URL: {url}, Resolution: {resolution}")
     logger.info(f"WebSocket manager: {ws_manager is not None}")
+
+    staging_dir = None
+    cleanup_staging = True
 
     try:
         download_status[download_id] = {
@@ -194,8 +371,11 @@ async def download_video(
         user_download_dir = os.path.join(DOWNLOADS_DIR, relative_download_path)
         
         # Create directory with all parent directories
-        from pathlib import Path
         Path(user_download_dir).mkdir(parents=True, exist_ok=True)
+
+        # 동일한 제목을 반환하는 URL들도 서로 간섭하지 않도록 작업별로 격리한다.
+        staging_dir = os.path.join(user_download_dir, '.vdtn-tmp', download_id)
+        Path(staging_dir).mkdir(parents=True, exist_ok=True)
 
         # Parse resolution options
         options = parse_resolution(resolution)
@@ -206,7 +386,7 @@ async def download_video(
 
         # Base yt-dlp options
         ydl_opts = {
-            'outtmpl': os.path.join(user_download_dir, '%(title)s.%(ext)s'),
+            'outtmpl': os.path.join(staging_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [lambda d: progress_hook(d, download_id, user_id, ws_manager, loop, notification_manager)],
             'writethumbnail': True,
             'embedthumbnail': True,
@@ -222,27 +402,34 @@ async def download_video(
             print(f"[Download] Using proxy: {proxy_url}")
             logger.info(f"Using proxy for download: {proxy_url}")
 
-        download_status[download_id]['status'] = 'downloading'
-        
-        # Send download started event via WebSocket
-        if ws_manager:
-            try:
-                print(f"[WebSocket] Sending download_started for {download_id}")
-                await ws_manager.send_download_started(
-                    user_id, 
-                    download_id, 
-                    url, 
-                    resolution,
-                    "Preparing download..."
-                )
-            except Exception as e:
-                print(f"[WebSocket] Error sending download_started: {e}")
+        execution_lock = _get_download_execution_lock()
+        async with execution_lock:
+            download_status[download_id]['status'] = 'downloading'
 
-        # Run download in executor to avoid blocking
-        result = await loop.run_in_executor(
-            None,
-            lambda: _download_with_ydl(ydl_opts, url)
-        )
+            # Send download started event via WebSocket
+            if ws_manager:
+                try:
+                    print(f"[WebSocket] Sending download_started for {download_id}")
+                    await ws_manager.send_download_started(
+                        user_id,
+                        download_id,
+                        url,
+                        resolution,
+                        "Preparing download..."
+                    )
+                except Exception as e:
+                    print(f"[WebSocket] Error sending download_started: {e}")
+
+            # 실제 다운로드는 서버 프로세스에서 하나씩 실행한다.
+            # 실행 스레드가 실패하거나 취소돼도 이미 완료된 파일은 보존한다.
+            cleanup_staging = False
+            result = await _download_with_rate_limit_retry(
+                loop,
+                ydl_opts,
+                url,
+                download_id,
+                logger,
+            )
 
         # Determine expected extension based on resolution option
         # This is more reliable than checking the actual file
@@ -256,29 +443,27 @@ async def download_video(
         
         print(f"[Download] Resolution: {resolution}, Expected extension: {expected_extension}")
         
-        # Get the actual downloaded file path
-        full_path = result['filename']
-        actual_extension = os.path.splitext(full_path)[1].lower()
-        
-        # If extensions don't match, rename the file to match expected extension
-        if actual_extension != expected_extension:
-            print(f"[Download] Extension mismatch: {actual_extension} vs {expected_extension}")
-            base_path = os.path.splitext(full_path)[0]
-            new_path = base_path + expected_extension
-            
-            # Check if file with expected extension already exists
-            if os.path.exists(new_path) and new_path != full_path:
-                print(f"[Download] Removing old file: {new_path}")
-                os.remove(new_path)
-            
-            # Rename file to expected extension
-            if os.path.exists(full_path):
-                print(f"[Download] Renaming {full_path} to {new_path}")
-                os.rename(full_path, new_path)
-                full_path = new_path
+        output_paths = _collect_download_outputs(
+            staging_dir,
+            result['filename'],
+            expected_extension,
+        )
+        output_filename = requested_filename if len(output_paths) == 1 else None
+        moved_paths = [
+            _move_download_to_output(
+                str(output_path),
+                user_download_dir,
+                output_filename,
+                download_id,
+            )
+            for output_path in output_paths
+        ]
+        full_path = moved_paths[0]
+        cleanup_staging = True
+        result['filename'] = full_path
         
         relative_path = os.path.relpath(full_path, DOWNLOADS_DIR)
-        file_extension = expected_extension
+        file_extension = Path(full_path).suffix.lower()
         
         print(f"[Download] Final file path: {full_path}")
         print(f"[Download] Relative path: {relative_path}")
@@ -287,15 +472,11 @@ async def download_video(
         actual_file_type = file_type
         
         # Override file type based on actual extension
-        audio_extensions = ['.mp3', '.m4a', '.opus', '.ogg', '.wav', '.flac', '.aac']
-        video_extensions = ['.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv']
-        subtitle_extensions = ['.srt', '.vtt', '.ass', '.ssa']
-        
-        if file_extension in audio_extensions:
+        if file_extension in AUDIO_EXTENSIONS:
             actual_file_type = 'audio'
-        elif file_extension in video_extensions:
+        elif file_extension in VIDEO_EXTENSIONS:
             actual_file_type = 'video'
-        elif file_extension in subtitle_extensions:
+        elif file_extension in SUBTITLE_EXTENSIONS:
             actual_file_type = 'subtitle'
         
         # Check for existing file with same URL and extension (for duplicate prevention)
@@ -467,6 +648,14 @@ async def download_video(
             'status': 'error',
             'message': error_str
         }
+    finally:
+        if staging_dir and cleanup_staging:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            staging_root = Path(staging_dir).parent
+            try:
+                staging_root.rmdir()
+            except OSError:
+                pass
 
 def _download_with_ydl(ydl_opts: dict, url: str) -> dict:
     """Helper function to run yt-dlp download"""

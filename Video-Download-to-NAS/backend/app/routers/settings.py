@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -29,10 +29,10 @@ class SettingsUpdate(BaseModel):
     default_user_quota_gb: Optional[int] = None
     admin_quota_gb: Optional[int] = None
     display_name_change_cooldown_days: Optional[int] = None
-    rate_limit_super_admin: Optional[int] = None
-    rate_limit_admin: Optional[int] = None
-    rate_limit_user: Optional[int] = None
-    rate_limit_guest: Optional[int] = None
+    rate_limit_super_admin: Optional[int] = Field(default=None, ge=0)
+    rate_limit_admin: Optional[int] = Field(default=None, ge=0)
+    rate_limit_user: Optional[int] = Field(default=None, ge=0)
+    rate_limit_guest: Optional[int] = Field(default=None, ge=0)
 
 class SystemStats(BaseModel):
     total_users: int

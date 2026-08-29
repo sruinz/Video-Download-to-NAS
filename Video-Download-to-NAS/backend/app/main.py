@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, WebSocket
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -23,13 +23,15 @@ from .auth import (
     verify_token
 )
 from .downloader import download_video, get_download_status
+from .download_rate_limit import DownloadRateLimiter, enforce_download_rate_limit
 from .routers import users, settings, share_links, public_board, sso, sso_admin, api_tokens, telegram_bot, role_permissions, version, admin_metadata
 from .websocket_manager import manager as ws_manager
 from .library_sync import sync_user_library, sync_all_libraries
 
-# Rate limiter setup (will be configured from DB after startup)
+# 로그인과 다운로드 요청 제한기는 서로 다른 정책을 사용한다.
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
-app = FastAPI(title="Video Download to NAS API", version="1.1.6")  # Updated by update_version.sh during build
+download_rate_limiter = DownloadRateLimiter()
+app = FastAPI(title="Video Download to NAS API", version="1.1.8")  # Updated by update_version.sh during build
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -158,12 +160,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+        "Retry-After",
+    ],
 )
 
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
-    from .settings_helper import get_setting
     from .migrations import migrate_sso_schema, init_sso_settings, migrate_api_tokens_schema, migrate_telegram_bots_schema, migrate_role_permissions_schema, migrate_user_approval_schema
     from .sso.scheduler import start_scheduler
     from .telegram.bot_manager import bot_manager
@@ -292,10 +299,6 @@ async def startup_event():
             logger.error(f"Failed to start Telegram bots: {e}")
             print(f"⚠️  Telegram bots startup warning: {e}")
     
-    # Update rate limiter from DB settings
-    rate_limit = get_setting(db, 'rate_limit_per_minute', '60')
-    limiter._default_limits = [f"{rate_limit}/minute"]
-    
     db.close()
     print("✅ Database initialized")
     print("✅ Server ready")
@@ -322,7 +325,7 @@ async def shutdown_event():
 async def root():
     return {
         "message": "Video Download to NAS API",
-        "version": "1.1.6",
+        "version": "1.1.8",
         "status": "running",
         "legal_notice": "This software is a tool for legitimate media archiving. Users are responsible for compliance with copyright laws and platform terms of service.",
         "documentation": {
@@ -420,11 +423,11 @@ async def login(request: Request, user_login: UserLogin, db: Session = Depends(g
 # === Extension Compatible Endpoint ===
 
 @app.post("/rest")
-@limiter.limit("10/minute")
 async def rest_download(
     request: Request,
     body: DownloadRequest,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -474,6 +477,13 @@ async def rest_download(
     
     logger.info(f"REST API authentication successful: user={user.username}, user_id={user.id}, method={auth_method}")
 
+    enforce_download_rate_limit(
+        response,
+        db,
+        user,
+        download_rate_limiter,
+    )
+
     # Generate download ID
     download_id = str(uuid.uuid4())
 
@@ -485,7 +495,8 @@ async def rest_download(
         download_id,
         db,
         user.id,
-        ws_manager
+        ws_manager,
+        body.filename
     )
     
     logger.info(f"REST API download started: download_id={download_id}, user={user.username}")
@@ -499,15 +510,22 @@ async def rest_download(
 # === Download Management Endpoints ===
 
 @app.post("/api/download", response_model=dict)
-@limiter.limit("10/minute")
 async def start_download(
     request: Request,
     body: DownloadRequest,
     background_tasks: BackgroundTasks,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Start a new download (requires authentication token)"""
+    enforce_download_rate_limit(
+        response,
+        db,
+        current_user,
+        download_rate_limiter,
+    )
+
     download_id = str(uuid.uuid4())
 
     background_tasks.add_task(
@@ -517,7 +535,8 @@ async def start_download(
         download_id,
         db,
         current_user.id,
-        ws_manager
+        ws_manager,
+        body.filename
     )
 
     return {

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, Field, field_serializer
 from typing import Optional, Literal, List
 from datetime import datetime, timezone
 
@@ -25,11 +25,12 @@ class UserQuotaUpdate(BaseModel):
     storage_quota_gb: int
 
 class UserRateLimitUpdate(BaseModel):
-    custom_rate_limit: Optional[int] = None  # null = use role default
+    custom_rate_limit: Optional[int] = Field(default=None, ge=0)  # null = use role default
 
 class DownloadRequest(BaseModel):
     url: str
     resolution: str = "best"
+    filename: Optional[str] = None
     id: Optional[str] = None  # Username (for password auth)
     pw: Optional[str] = None  # Password (for password auth)
     token: Optional[str] = None  # API token (for token auth)
