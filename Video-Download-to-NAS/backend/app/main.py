@@ -31,7 +31,7 @@ from .library_sync import sync_user_library, sync_all_libraries
 # 로그인과 다운로드 요청 제한기는 서로 다른 정책을 사용한다.
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 download_rate_limiter = DownloadRateLimiter()
-app = FastAPI(title="Video Download to NAS API", version="1.1.8")  # Updated by update_version.sh during build
+app = FastAPI(title="Video Download to NAS API", version="1.1.8-1")  # Updated by update_version.sh during build
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -325,7 +325,7 @@ async def shutdown_event():
 async def root():
     return {
         "message": "Video Download to NAS API",
-        "version": "1.1.8",
+        "version": "1.1.8-1",
         "status": "running",
         "legal_notice": "This software is a tool for legitimate media archiving. Users are responsible for compliance with copyright laws and platform terms of service.",
         "documentation": {

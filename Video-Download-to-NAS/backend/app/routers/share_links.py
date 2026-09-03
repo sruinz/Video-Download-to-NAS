@@ -386,17 +386,10 @@ async def get_shared_file_stream(
     # Return file for streaming or download
     actual_filename = Path(file.filename).name
     
-    # Set headers based on download parameter
-    headers = {}
-    if download:
-        # Force download with attachment header
-        headers["Content-Disposition"] = f'attachment; filename="{actual_filename}"'
-    
     return FileResponse(
         path=file_path,
         filename=actual_filename,
-        media_type='application/octet-stream',
-        headers=headers
+        media_type='application/octet-stream'
     )
 
 

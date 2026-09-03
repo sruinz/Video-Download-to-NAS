@@ -16,6 +16,10 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.8-1
+
+- Fixed downloads from anonymous, download-enabled share links so filenames containing Korean, Unicode, spaces, or special characters are delivered with an RFC-compliant `Content-Disposition` header
+
 ## What's New in 1.1.8
 
 - Applies role-based download request limits, with user-specific limits taking precedence over role defaults
