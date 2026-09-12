@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..database import User, get_db
 from ..auth import require_role
+from ..local_login import admin_local_login_allowed
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -41,11 +42,13 @@ class SystemStats(BaseModel):
     active_downloads: int
 
 @router.get("/public")
-async def get_public_settings(db: Session = Depends(get_db)):
+async def get_public_settings(request: Request, response: Response, db: Session = Depends(get_db)):
     """Get public settings (no authentication required)"""
     from ..settings_helper import get_bool_setting
     
+    response.headers["Cache-Control"] = "no-store"
     return {
+        "admin_local_login_allowed": admin_local_login_allowed(request),
         "allow_registration": get_bool_setting(db, "allow_registration", True),
         "local_login_enabled": get_bool_setting(db, "local_login_enabled", True)
     }

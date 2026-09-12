@@ -32,6 +32,7 @@ from app.sso.user_management import (
 from app.sso.security import generate_state, verify_state, cleanup_expired_states
 from app.database import init_db, SessionLocal, Base, engine, User, SystemSetting, SSOState
 from app.auth import get_password_hash, verify_token
+from app.permissions import check_permission
 
 
 @pytest.fixture(scope="module")
@@ -98,7 +99,8 @@ class TestUserCreation:
         assert user.auth_provider == "google"
         assert user.external_id == "google-first-123"
         assert user.email_verified == 1
-        assert user.can_download_to_nas == 1
+        # 개별 저장값 대신 역할 상속까지 적용한 실제 권한을 검증한다.
+        assert check_permission(user, "can_download_to_nas", db_session) is True
     
     def test_create_second_user_with_default_role(self, setup_database, db_session):
         """두 번째 사용자는 기본 역할을 받아야 함"""

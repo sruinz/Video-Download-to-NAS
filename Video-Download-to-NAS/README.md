@@ -16,6 +16,12 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.8-2
+
+- When local login is disabled, super administrator recovery login is available only through a direct internal IP address over HTTP.
+- Reverse-proxy access hides the administrator login button and blocks password authentication through the login and REST APIs. SSO and API token authentication remain available.
+- Details: [Administrator recovery login guide](LOCAL_LOGIN_RECOVERY.md)
+
 ## What's New in 1.1.8-1
 
 - Fixed downloads from anonymous, download-enabled share links so filenames containing Korean, Unicode, spaces, or special characters are delivered with an RFC-compliant `Content-Disposition` header

@@ -22,6 +22,8 @@ from .auth import (
     init_default_user,
     verify_token
 )
+from .local_login import enforce_local_login_access, enforce_local_login_role
+from .settings_helper import get_bool_setting
 from .downloader import download_video, get_download_status
 from .download_rate_limit import DownloadRateLimiter, enforce_download_rate_limit
 from .routers import users, settings, share_links, public_board, sso, sso_admin, api_tokens, telegram_bot, role_permissions, version, admin_metadata
@@ -31,7 +33,7 @@ from .library_sync import sync_user_library, sync_all_libraries
 # 로그인과 다운로드 요청 제한기는 서로 다른 정책을 사용한다.
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 download_rate_limiter = DownloadRateLimiter()
-app = FastAPI(title="Video Download to NAS API", version="1.1.8-1")  # Updated by update_version.sh during build
+app = FastAPI(title="Video Download to NAS API", version="1.1.8-2")  # Updated by update_version.sh during build
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -325,7 +327,7 @@ async def shutdown_event():
 async def root():
     return {
         "message": "Video Download to NAS API",
-        "version": "1.1.8-1",
+        "version": "1.1.8-2",
         "status": "running",
         "legal_notice": "This software is a tool for legitimate media archiving. Users are responsible for compliance with copyright laws and platform terms of service.",
         "documentation": {
@@ -397,12 +399,9 @@ async def get_license():
 @limiter.limit("5/minute")
 async def login(request: Request, user_login: UserLogin, db: Session = Depends(get_db)):
     """Login endpoint with rate limiting"""
-    # Check if local login is enabled
-    local_login_setting = db.query(SystemSetting).filter(
-        SystemSetting.key == 'local_login_enabled'
-    ).first()
-    local_login_enabled = local_login_setting.value.lower() == 'true' if local_login_setting else True
-    
+    local_login_enabled = get_bool_setting(db, "local_login_enabled", True)
+    enforce_local_login_access(request, local_login_enabled)
+
     user = authenticate_user(db, user_login.id, user_login.pw)
     if not user:
         raise HTTPException(
@@ -410,12 +409,7 @@ async def login(request: Request, user_login: UserLogin, db: Session = Depends(g
             detail="Incorrect username or password"
         )
     
-    # If local login is disabled, only allow super_admin
-    if not local_login_enabled and user.role != 'super_admin':
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Local login is disabled. Only super admin can login locally."
-        )
+    enforce_local_login_role(user, local_login_enabled)
 
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -462,8 +456,11 @@ async def rest_download(
     
     # 3. Fallback to username/password
     if not user and body.id and body.pw:
+        local_login_enabled = get_bool_setting(db, "local_login_enabled", True)
+        enforce_local_login_access(request, local_login_enabled)
         user = authenticate_user(db, body.id, body.pw)
         if user:
+            enforce_local_login_role(user, local_login_enabled)
             auth_method = "password"
             logger.info(f"REST API: Password authentication successful for user {user.username}")
     

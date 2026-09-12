@@ -13,7 +13,8 @@ export default function Login({ onLogin, onShowRegister }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ssoProviders, setSsoProviders] = useState([]);
-  const [localLoginEnabled, setLocalLoginEnabled] = useState(true);
+  const [localLoginEnabled, setLocalLoginEnabled] = useState(false);
+  const [adminLocalLoginAllowed, setAdminLocalLoginAllowed] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
 
   // Map backend SSO error messages to translation keys
@@ -87,13 +88,16 @@ export default function Login({ onLogin, onShowRegister }) {
     
     const loadPublicSettings = async () => {
       try {
-        const response = await fetch('/api/settings/public');
+        const response = await fetch('/api/settings/public', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Failed to load public settings');
         const data = await response.json();
-        setLocalLoginEnabled(data.local_login_enabled !== false);
+        setLocalLoginEnabled(data.local_login_enabled === true);
+        setAdminLocalLoginAllowed(data.admin_local_login_allowed === true);
       } catch (error) {
         console.error('Failed to load public settings:', error);
-        // Default to enabled if fetch fails
-        setLocalLoginEnabled(true);
+        // 설정 확인에 실패하면 비밀번호 로그인 화면을 노출하지 않는다.
+        setLocalLoginEnabled(false);
+        setAdminLocalLoginAllowed(false);
       }
     };
     
@@ -133,8 +137,8 @@ export default function Login({ onLogin, onShowRegister }) {
     }
   };
 
-  // Show local login form if enabled OR if admin login button was clicked
-  const shouldShowLocalLogin = localLoginEnabled || showAdminLogin;
+  // 서버가 허용한 내부 접속에서만 관리자 백업 폼을 표시한다.
+  const shouldShowLocalLogin = localLoginEnabled || (adminLocalLoginAllowed && showAdminLogin);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-yt-darker">
@@ -222,7 +226,7 @@ export default function Login({ onLogin, onShowRegister }) {
         )}
 
         {/* Admin Login Button - show only when local login is disabled and form is hidden */}
-        {!localLoginEnabled && !showAdminLogin && ssoProviders.length > 0 && (
+        {!localLoginEnabled && adminLocalLoginAllowed && !showAdminLogin && (
           <div className="mt-6 flex justify-center">
             <button
               onClick={() => setShowAdminLogin(true)}
