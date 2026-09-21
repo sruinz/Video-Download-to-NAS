@@ -16,6 +16,11 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.9
+
+- Fixed a library loading failure caused by download sources that report fractional media durations.
+- The backend now stores durations as whole seconds and automatically repairs affected existing records when it starts. Re-downloading files or running library sync is unnecessary.
+
 ## What's New in 1.1.8-2
 
 - When local login is disabled, super administrator recovery login is available only through a direct internal IP address over HTTP.

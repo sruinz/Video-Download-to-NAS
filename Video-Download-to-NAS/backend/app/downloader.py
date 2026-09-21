@@ -34,6 +34,17 @@ COMPLETED_DOWNLOAD_EXTENSIONS = (
 )
 
 
+def _duration_in_seconds(value) -> Optional[int]:
+    """추출기가 반환한 길이를 라이브러리의 정수 초 단위로 정리한다."""
+    if value is None:
+        return None
+
+    try:
+        return int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _get_download_execution_lock() -> asyncio.Lock:
     """현재 이벤트 루프에서 실제 다운로드를 하나씩 실행하는 잠금을 반환한다."""
     loop = asyncio.get_running_loop()
@@ -521,7 +532,7 @@ async def download_video(
             existing_file.file_type = actual_file_type
             existing_file.file_size = result.get('filesize')
             existing_file.thumbnail = thumbnail_value
-            existing_file.duration = result.get('duration')
+            existing_file.duration = _duration_in_seconds(result.get('duration'))
             # Update metadata fields
             existing_file.resolution = metadata.get('resolution')
             existing_file.video_codec = metadata.get('video_codec')
@@ -538,7 +549,7 @@ async def download_video(
                 file_type=actual_file_type,
                 file_size=result.get('filesize'),
                 thumbnail=thumbnail_value,
-                duration=result.get('duration'),
+                duration=_duration_in_seconds(result.get('duration')),
                 resolution=metadata.get('resolution'),
                 video_codec=metadata.get('video_codec'),
                 audio_codec=metadata.get('audio_codec'),

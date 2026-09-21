@@ -1,10 +1,12 @@
 """
 Database migration utilities for VDTN SSO implementation
 """
-from sqlalchemy import inspect, text
+from sqlalchemy import Integer, cast, inspect, text, update
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
+
+from .database import DownloadedFile
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,25 @@ def index_exists(engine, table_name: str, index_name: str) -> bool:
     inspector = inspect(engine)
     indexes = inspector.get_indexes(table_name)
     return any(idx['name'] == index_name for idx in indexes)
+
+
+def migrate_downloaded_file_duration_values(db: Session):
+    """소수로 저장된 기존 파일 길이를 정수 초 단위로 보정한다."""
+    duration_as_integer = cast(DownloadedFile.duration, Integer)
+    result = db.execute(
+        update(DownloadedFile)
+        .where(
+            DownloadedFile.duration.isnot(None),
+            DownloadedFile.duration != duration_as_integer,
+        )
+        .values(duration=duration_as_integer)
+    )
+    db.commit()
+
+    return {
+        "success": True,
+        "normalized_count": result.rowcount,
+    }
 
 
 def migrate_sso_schema(db: Session):

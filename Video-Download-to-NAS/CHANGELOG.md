@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.9] - 2026-09-21
+
+### Fixed
+- Normalized fractional media durations before saving downloads so one record cannot make an entire user's library response fail validation
+- Automatically repaired existing fractional duration records at backend startup; affected libraries reappear without re-download or library resynchronization
+
 ## [1.1.8-2] - 2026-09-12
 
 ### Fixed

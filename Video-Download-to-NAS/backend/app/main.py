@@ -33,7 +33,7 @@ from .library_sync import sync_user_library, sync_all_libraries
 # 로그인과 다운로드 요청 제한기는 서로 다른 정책을 사용한다.
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 download_rate_limiter = DownloadRateLimiter()
-app = FastAPI(title="Video Download to NAS API", version="1.1.8-2")  # Updated by update_version.sh during build
+app = FastAPI(title="Video Download to NAS API", version="1.1.9")  # Updated by update_version.sh during build
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -203,6 +203,18 @@ async def startup_event():
     
     init_db()
     db = next(get_db())
+
+    # 이전 버전이 소수로 저장한 길이는 라이브러리 응답 전에 정수 초로 보정한다.
+    try:
+        from .migrations import migrate_downloaded_file_duration_values
+        result = migrate_downloaded_file_duration_values(db)
+        print(
+            "✅ Downloaded file duration normalization completed: "
+            f"{result['normalized_count']} files updated"
+        )
+    except Exception as e:
+        logger.error(f"Downloaded file duration normalization error: {e}")
+        print(f"⚠️  Downloaded file duration normalization warning: {e}")
     
     # Run SSO schema migration
     try:
@@ -327,7 +339,7 @@ async def shutdown_event():
 async def root():
     return {
         "message": "Video Download to NAS API",
-        "version": "1.1.8-2",
+        "version": "1.1.9",
         "status": "running",
         "legal_notice": "This software is a tool for legitimate media archiving. Users are responsible for compliance with copyright laws and platform terms of service.",
         "documentation": {
