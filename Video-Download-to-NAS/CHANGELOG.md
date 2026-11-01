@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.10] - 2026-11-01
+
+### Fixed
+- Fixed an issue where downloads requested with URLs or video IDs as the filename parameter resulted in distorted final filenames (e.g., `watch_v=...` or video IDs)
+- Strengthened backend output filename validation to preserve yt-dlp extracted video titles when requested filenames are invalid or suspicious
+
 ## [1.1.9] - 2026-09-21
 
 ### Fixed

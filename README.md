@@ -16,6 +16,11 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.10
+
+- Fixed an issue where downloads requested via browser extension or API resulted in distorted filenames when URLs or video IDs were passed as the filename parameter.
+- Strengthened backend output filename validation to preserve yt-dlp extracted video titles.
+
 ## What's New in 1.1.9
 
 - Fixed a library loading failure caused by download sources that report fractional media durations.
@@ -25,7 +30,7 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 - When local login is disabled, super administrator recovery login is available only through a direct internal IP address over HTTP.
 - Reverse-proxy access hides the administrator login button and blocks password authentication through the login and REST APIs. SSO and API token authentication remain available.
-- Details: [Administrator recovery login guide](Video-Download-to-NAS/LOCAL_LOGIN_RECOVERY.md)
+- Details: [Administrator recovery login guide](server/LOCAL_LOGIN_RECOVERY.md)
 
 ## What's New in 1.1.8-1
 

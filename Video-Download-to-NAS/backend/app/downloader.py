@@ -95,18 +95,39 @@ async def _download_with_rate_limit_retry(
             })
 
 
+def _is_suspicious_requested_filename(requested_filename: str) -> bool:
+    """URL 형태이거나 비정상적인 요청 파일명인지 검사한다."""
+    trimmed = str(requested_filename).strip()
+    if not trimmed:
+        return True
+    if trimmed.startswith(('http://', 'https://', 'rtmp://', 'blob:')) or '://' in trimmed:
+        return True
+    if 'watch?v=' in trimmed or 'watch_v=' in trimmed or trimmed.startswith('?'):
+        return True
+    if trimmed.lower() in ('videoplayback', 'playlist', 'manifest', 'video', 'audio', 'master'):
+        return True
+    if re.match(r'^[a-zA-Z0-9_-]{11}$', trimmed):
+        return True
+    return False
+
+
 def _safe_output_filename(
     requested_filename: Optional[str],
     fallback_filename: str,
     extension: str,
 ) -> str:
     """요청 파일명을 단일 안전한 파일명으로 정리한다."""
-    raw_name = requested_filename or fallback_filename
+    raw_name = requested_filename
+    if not raw_name or _is_suspicious_requested_filename(raw_name):
+        raw_name = fallback_filename
+
     basename = str(raw_name).replace('\\', '/').rsplit('/', 1)[-1]
     stem = Path(basename).stem if Path(basename).suffix else basename
     stem = re.sub(r'[/\\:*?"<>|]', '_', stem).strip(' ._')
-    if not stem:
-        stem = Path(fallback_filename).stem or 'download'
+    if not stem or _is_suspicious_requested_filename(stem):
+        fallback_basename = str(fallback_filename).replace('\\', '/').rsplit('/', 1)[-1]
+        stem = Path(fallback_basename).stem if Path(fallback_basename).suffix else fallback_basename
+        stem = re.sub(r'[/\\:*?"<>|]', '_', stem).strip(' ._') or 'download'
     return f"{stem[:180]}{extension}"
 
 

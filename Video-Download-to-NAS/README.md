@@ -1,20 +1,9 @@
 # Video Download to NAS
 
-[한국어](./README.ko.md) | **English**
+## What's New in 1.1.10
 
-![Project Status](https://img.shields.io/badge/status-personal%20use-blue)
-![Maintenance](https://img.shields.io/badge/maintenance-as--needed-yellow)
-![PRs](https://img.shields.io/badge/PRs-not%20accepted-red)
-![License](https://img.shields.io/badge/license-MIT-green)
-
-<img width="558" height="417" alt="스크린샷 2025-11-24 11 02 30" src="https://github.com/user-attachments/assets/93ec418e-d282-4ba4-95bd-670834a7a08e" />
-
-<img width="1353" height="864" alt="스크린샷 2025-11-24 11 00 21" src="https://github.com/user-attachments/assets/fcf368e6-948c-4781-9716-e924616fe945" />
-
-
-A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compatible with the [Video Download to NAS Extension](https://github.com/sruinz/Video-Download-to-NAS-Extension).
-
-> **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
+- Fixed an issue where downloads requested via browser extension or API resulted in distorted filenames when URLs or video IDs were passed as the filename parameter.
+- Strengthened backend output filename validation to preserve yt-dlp extracted video titles.
 
 ## What's New in 1.1.9
 
@@ -27,52 +16,30 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 - Reverse-proxy access hides the administrator login button and blocks password authentication through the login and REST APIs. SSO and API token authentication remain available.
 - Details: [Administrator recovery login guide](LOCAL_LOGIN_RECOVERY.md)
 
-## What's New in 1.1.8-1
+## 1.1.8-1 변경사항
 
-- Fixed downloads from anonymous, download-enabled share links so filenames containing Korean, Unicode, spaces, or special characters are delivered with an RFC-compliant `Content-Disposition` header
+- 비회원 접근과 다운로드를 허용한 공유 링크에서 한글·Unicode·공백·특수문자가 포함된 파일명이 RFC 호환 `Content-Disposition`으로 정상 다운로드되도록 수정
 
-## What's New in 1.1.8
+## 1.1.8 변경사항
 
-- Applies role-based download request limits, with user-specific limits taking precedence over role defaults
-- Runs download requests sequentially on the server
-- Provides response headers so clients can wait and retry after an HTTP 429 rate-limit response
-- Automatically retries after waiting 30 or 60 seconds when an origin server returns HTTP 429
-- Isolates working files for each request and preserves all result files from one request
+- `/rest`와 `/api/download`에 역할별 다운로드 요청 제한을 실제 적용
+- 사용자별 요청 제한이 설정된 경우 역할 기본값보다 우선 적용
+- 브라우저 확장이 요청 제한 HTTP 429 응답의 대기 시간을 처리하고 재시도할 수 있도록 응답 헤더 제공
+- 원본 서버가 HTTP 429를 반환하면 30초 또는 60초 지연 후 서버가 자동으로 재시도
+- 서버가 다운로드 요청을 순차적으로 실행하도록 변경
+- 요청별 작업 파일을 격리하고 한 요청에서 생성된 다중 결과 파일을 모두 보존
 
-## ⚠️ Legal Notice
-
-**This software is a TOOL for personal media archiving and backup purposes.**
-
-### User Responsibility
-- **You** choose what content to download
-- **You** are responsible for complying with copyright laws
-- **You** must respect platform Terms of Service
-- The developer is **not responsible** for how you use this tool
-
-### Legitimate Use Cases
-✅ Backing up your own uploaded content  
-✅ Downloading Creative Commons licensed content  
-✅ Archiving public domain materials  
-✅ Educational Fair Use purposes  
-✅ Personal backup of legally purchased content  
-
-### Prohibited Uses
-❌ Downloading copyrighted content without permission  
-❌ Commercial redistribution of downloaded content  
-❌ Violating platform Terms of Service  
-❌ Mass downloading for commercial purposes  
-
-**By using this software, you acknowledge that you understand and will comply with all applicable laws and terms of service.**
+A modern, self-hosted video download service with a beautiful YouTube-inspired UI. Compatible with the [Video Download to NAS Extension](https://github.com/sruinz/Video-Download-to-NAS).
 
 ## ✨ Features
 
-- 🎥 **Download videos** from 1000+ supported sites (powered by yt-dlp)
+- 🎥 **Download videos** from YouTube and 1000+ sites (powered by yt-dlp)
 - 🎵 **Extract audio** in M4A or MP3 format
 - 📝 **Download subtitles** in multiple languages (SRT, VTT)
-- ✏️ **Rename files** with security validation and auto-extension preservation
-- 📊 **Video metadata display** - view detailed information (resolution, codecs, bitrate, framerate)
-- 🎨 **Beautiful UI** with modern dark theme
-- 🔐 **Secure authentication** with JWT tokens and SSO support
+- 🎨 **Beautiful UI** with YouTube-inspired dark theme
+- 🔐 **Secure authentication** with JWT tokens and rate limiting
+- 🔍 **Search & filter** library with pagination
+- 🔗 **File sharing** with expiration and password protection
 - 📱 **Responsive design** works on all devices
 - 🔌 **Extension compatible** - works with browser extensions
 - 🐳 **Docker ready** - easy deployment with Docker Compose
@@ -88,7 +55,7 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 1. **Clone or create the project directory**
    ```bash
-   cd Video-Download-to-NAS
+   cd video-download-to-nas-server
    ```
 
 2. **Configure environment variables**
@@ -107,10 +74,9 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
    http://your-nas-ip:3000
    ```
 
-   **First User Setup:**
-   - The first user to register will automatically become the super admin
-   - Choose a strong username and password
-   - This account will have full system access
+   Default credentials:
+   - Username: `admin`
+   - Password: `admin123`
 
 ## 📦 Synology NAS Deployment
 
@@ -125,17 +91,53 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
    sudo docker-compose up -d
    ```
 
+### NPM Plus / Reverse Proxy Setup
+
+**Good news!** Version v1.1.0+ includes built-in Nginx proxy configuration. No additional setup needed for most users!
+
+For advanced configurations or troubleshooting, see:
+- [NPM Plus Setup Guide (English)](./NPM_PLUS_SETUP_GUIDE.md)
+- [NPM Plus 설정 가이드 (한국어)](./NPM_PLUS_설정가이드.md)
+
+#### Secure Deployment (Recommended)
+
+Use `docker-compose.secure.yml` to prevent backend from being exposed externally:
+
+```bash
+docker-compose -f docker-compose.secure.yml up -d
+```
+
+This configuration:
+- ✅ Only exposes port 3000 (frontend)
+- ✅ Backend accessible only through frontend proxy
+- ✅ Better security for production environments
+
 ## 🔧 Configuration
 
 ### Environment Variables
 
-Edit `.env` file:
+Copy `.env.example` to `.env` and edit:
+
+```bash
+cp .env.example .env
+```
 
 ```env
-# Security (CHANGE THESE!)
-JWT_SECRET=your-super-secret-jwt-key-change-me
-SSO_ENCRYPTION_KEY=your-sso-encryption-key-if-using-sso
+# Security (CHANGE THESE IN PRODUCTION!)
+JWT_SECRET=your-super-secret-jwt-key-change-me-in-production
+DEFAULT_USER=admin
+DEFAULT_PASSWORD=admin123
+
+# Database
+DATABASE_URL=sqlite:///app/data/vdtn.db
+
+# CORS Settings (comma-separated list of allowed origins)
+# Example: http://localhost:3000,http://192.168.1.100:3000
+# Use * for development only
 ALLOWED_ORIGINS=*
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=60
 ```
 
 ### Download Location
@@ -149,97 +151,14 @@ volumes:
 
 ## 🔌 Browser Extension Setup
 
-This server is compatible with the [Video Download to NAS Extension](https://github.com/sruinz/Video-Download-to-NAS-Extension).
-
-### Method 1: Config URL (Easiest - Recommended)
+This server is compatible with the [Video Download to NAS Extension](https://github.com/sruinz/Video-Download-to-NAS).
 
 1. Install the extension from Chrome/Edge store
-2. Log in to the web UI
-3. Go to **Account Settings** > **API Tokens** tab
-4. Click **"Generate New Token"**
-5. Copy the **"Method 1: Config URL"**
-6. Open extension options and paste the Config URL
-7. Save
-
-### Method 2: Username + API Token
-
-1. Generate an API token (steps 2-4 above)
-2. Copy the **"Method 2: API Token"**
-3. Open extension options and configure:
-   - **Authentication Method**: Username + API Token
-   - **REST API URL**: `http://your-nas-ip:8000/rest`
-   - **Username**: Your username
-   - **API Token**: Paste the token
-
-### Method 3: Username + Password (Legacy)
-
-1. Open extension options
-2. Configure:
-   - **Authentication Method**: Username + Password
-   - **REST API URL**: `http://your-nas-ip:8000/rest`
+2. Open extension options
+3. Configure:
+   - **REST API URL**: `http://your-nas-ip:3000/rest`
    - **Username**: Your username
    - **Password**: Your password
-
-**Note:** Methods 1 and 2 are more secure and recommended, especially for SSO users.
-
-## 🔑 API Token Authentication
-
-API tokens provide a secure way to authenticate external applications (browser extensions, Telegram bots) without using your password.
-
-### Benefits
-
-- ✅ **More secure** than password authentication
-- ✅ **Works with SSO** accounts (Google, Microsoft, GitHub, etc.)
-- ✅ **Individual management** - create multiple tokens for different apps
-- ✅ **Easy revocation** - revoke tokens without changing password
-- ✅ **Audit trail** - see when each token was last used
-
-### Creating API Tokens
-
-1. Log in to the web UI
-2. Click your profile icon > **Account Settings**
-3. Go to **API Tokens** tab
-4. Click **"Generate New Token"**
-5. Enter a descriptive name (e.g., "My Telegram Bot", "Chrome Extension")
-6. Copy the token immediately (it won't be shown again!)
-
-### Using API Tokens
-
-**Config URL (Simplest)**
-```
-http://your-nas-ip:3000#vdtn_abc123def456...
-```
-Just paste this URL into your extension or bot configuration.
-
-**API Token (Advanced)**
-```
-Authorization: Bearer vdtn_abc123def456...
-```
-Use this header in API requests.
-
-**Username + Password (Legacy)**
-```json
-{
-  "id": "username",
-  "pw": "password"
-}
-```
-Include in request body (not recommended for security).
-
-### Security Best Practices
-
-- 🔒 **Use API tokens** instead of passwords when possible
-- 🔄 **Rotate tokens** regularly (every 3-6 months)
-- 🗑️ **Revoke unused tokens** immediately
-- 📝 **Use descriptive names** to track token usage
-- 🚫 **Never share tokens** publicly or in code repositories
-- ⚠️ **Treat tokens like passwords** - keep them secret!
-
-### Token Limits
-
-- Maximum **10 active tokens** per user
-- Tokens never expire (until revoked)
-- Last used timestamp tracked for each token
 
 ## 📖 API Documentation
 
@@ -251,8 +170,8 @@ POST /api/login
 Content-Type: application/json
 
 {
-  "id": "your_username",
-  "pw": "your_password"
+  "id": "admin",
+  "pw": "admin123"
 }
 ```
 
@@ -272,10 +191,10 @@ POST /rest
 Content-Type: application/json
 
 {
-  "url": "https://example.com/video/...",
+  "url": "https://www.youtube.com/watch?v=...",
   "resolution": "1080p",
-  "id": "your_username",
-  "pw": "your_password"
+  "id": "admin",
+  "pw": "admin123"
 }
 ```
 
@@ -286,7 +205,7 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "url": "https://example.com/video/...",
+  "url": "https://www.youtube.com/watch?v=...",
   "resolution": "best"
 }
 ```
@@ -324,14 +243,7 @@ npm run dev
 
 ## 🤝 Contributing
 
-**Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed or merged.
-
-If you want to add features or fix bugs:
-- **Fork the repository** and make your changes
-- **Maintain your own fork** with your improvements
-- **Share your fork** if others might benefit
-
-Bug reports via GitHub Issues are welcome and help document known issues.
+Issues and pull requests are welcome!
 
 ## 📄 License
 
@@ -340,51 +252,9 @@ MIT License
 ## 🙏 Credits
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Video download engine
+- [youtube-dl-nas](https://github.com/hyeonsangjeon/youtube-dl-nas) - Original inspiration
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
 
-## ⚠️ Important Legal Information
+## ⚠️ Disclaimer
 
-### This is a Tool, Not a Service
-
-This software is a **general-purpose media downloading tool** based on yt-dlp. It does not host, provide, or distribute any content. Users provide their own URLs and make their own choices about what to download.
-
-### Your Responsibilities
-
-1. **Copyright Compliance**: Ensure you have the right to download and store the content
-2. **Terms of Service**: Respect the terms of service of websites you access
-3. **Personal Use**: This tool is designed for personal, non-commercial use
-4. **Legal Compliance**: Follow all applicable laws in your jurisdiction
-
-### Developer Liability
-
-The developers of this software:
-- Do NOT endorse or encourage copyright infringement
-- Do NOT control what users choose to download
-- Are NOT responsible for user actions or violations
-- Provide this tool "AS IS" without warranties
-
-### Acknowledgment
-
-By installing and using this software, you acknowledge that:
-- You understand these terms and your responsibilities
-- You will use this tool only for legitimate, legal purposes
-- You accept full responsibility for your actions
-- The developers are not liable for any misuse
-
-### Questions or Concerns?
-
-If you believe this tool is being misused or have legal concerns, please contact the repository maintainer.
-
----
-
-**Remember**: Just because you *can* download something doesn't mean you *should*. Always respect creators' rights and platform policies.
-
-
-
----
-
-## ☕ Support
-
-If this project helped you, buy me a coffee!
-
-<a href="https://www.buymeacoffee.com/sruinz" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+This tool is for personal use only. Respect copyright laws and terms of service of the websites you download from.
