@@ -78,6 +78,12 @@ class User(Base):
     
     # Folder organization mode
     folder_organization_mode = Column(String, default='root', nullable=False)  # root, date, site_full, site_name, date_site_full, date_site_name, site_full_date, site_name_date
+
+    # 자막 자동 동시 다운로드 설정
+    auto_download_subtitles = Column(Integer, default=0, nullable=False)  # 0 = off, 1 = on
+    subtitle_languages = Column(String(200), default='ko,en', nullable=False)  # 쉼표 구분 언어 코드
+    subtitle_format = Column(String(20), default='srt', nullable=False)  # srt, vtt
+    subtitle_include_auto = Column(Integer, default=1, nullable=False)  # 0 = 수동 자막만, 1 = 자동 생성 자막 포함
     
     # Relationships
     files = relationship("DownloadedFile", back_populates="user", cascade="all, delete-orphan")

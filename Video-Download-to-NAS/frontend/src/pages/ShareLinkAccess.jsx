@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, AlertCircle, Play, Download as DownloadIcon, ExternalLink, Eye, Clock, Globe } from 'lucide-react';
+import { Lock, AlertCircle, Play, Download as DownloadIcon, ExternalLink, Eye, Clock, Globe, Subtitles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { accessAdvancedShareLink, getFileUrl } from '../api';
 import { useModal } from '../contexts/ModalContext';
+import { formatSubtitleBadgeSummary } from '../utils/subtitleUtils';
 import showToast from '../utils/toast';
 
 export default function ShareLinkAccess({ token: propToken }) {
@@ -297,6 +298,16 @@ export default function ShareLinkAccess({ token: propToken }) {
               <Play className="w-24 h-24 text-gray-600" />
             )}
             
+            {file.subtitles?.length > 0 && (
+              <div
+                className="absolute bottom-4 left-4 bg-emerald-600/90 text-white text-xs sm:text-sm font-semibold px-2.5 py-1 rounded inline-flex items-center gap-1.5 shadow z-10 pointer-events-none"
+                title={t('subtitles.badgeTooltip', { langs: file.subtitles.map((s) => s.shortLabel).join(', ') })}
+              >
+                <Subtitles className="w-4 h-4" />
+                <span>{formatSubtitleBadgeSummary(file.subtitles)}</span>
+              </div>
+            )}
+
             {file.duration && (
               <div className="absolute bottom-4 right-4 bg-black/70 text-white text-sm px-3 py-1 rounded">
                 {formatDuration(file.duration)}

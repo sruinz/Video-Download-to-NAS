@@ -215,7 +215,7 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Downloaded file duration normalization error: {e}")
         print(f"⚠️  Downloaded file duration normalization warning: {e}")
-    
+
     # Run SSO schema migration
     try:
         migrate_sso_schema(db)
@@ -292,6 +292,15 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Video metadata migration error: {e}")
         print(f"⚠️  Video metadata migration warning: {e}")
+
+    # Run subtitle settings schema migration
+    try:
+        from .migrations import migrate_subtitle_settings_schema
+        result = migrate_subtitle_settings_schema(db)
+        print(f"✅ Subtitle settings schema migration completed: {result['added_columns']} columns added")
+    except Exception as e:
+        logger.error(f"Subtitle settings migration error: {e}")
+        print(f"⚠️  Subtitle settings migration warning: {e}")
     
     # Start SSO state cleanup scheduler
     try:
@@ -665,6 +674,38 @@ async def get_file(
         path=file_path,
         filename=actual_filename,
         media_type='application/octet-stream'
+    )
+
+@app.get("/api/file/{file_id}/subtitle")
+async def get_file_subtitle(
+    file_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """자막 파일을 브라우저 <track> 호환 WebVTT 형식으로 변환하여 반환한다."""
+    from .subtitle_helper import srt_to_webvtt
+    from .downloader import SUBTITLE_EXTENSIONS
+
+    file_info = db.query(DownloadedFile)\
+        .filter(DownloadedFile.id == file_id)\
+        .filter(DownloadedFile.user_id == current_user.id)\
+        .first()
+
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = Path("/app/downloads") / file_info.filename
+    if file_info.file_type != "subtitle" and file_path.suffix.lower() not in SUBTITLE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Not a subtitle file")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Subtitle file not found on disk")
+
+    vtt_content = srt_to_webvtt(file_path.read_bytes())
+    return Response(
+        content=vtt_content,
+        media_type="text/vtt; charset=utf-8",
+        headers={"Cache-Control": "private, max-age=300"},
     )
 
 @app.delete("/api/file/{file_id}")

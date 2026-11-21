@@ -16,11 +16,13 @@ import {
   ArrowUpDown,
   Folder,
   User,
-  X
+  X,
+  Subtitles
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFileActions } from '../hooks/useFileActions';
 import { extractDisplayFilename, extractFolderPathString } from '../utils/folderTree';
+import { formatSubtitleBadgeSummary, parseSubtitleInfo } from '../utils/subtitleUtils';
 
 export default function VideoListView({
   files,
@@ -161,7 +163,12 @@ export default function VideoListView({
           const folderPath = !isPublicBoard
             ? extractFolderPathString(file.filename, currentUser?.username)
             : '';
-          const thumbnailUrl = getThumbnailUrl(file);
+          const isSubtitle = file.file_type === 'subtitle';
+          const subtitleMeta = isSubtitle ? (file.subtitleMeta || parseSubtitleInfo(file.filename)) : null;
+          const subtitleBadge = !isSubtitle && file.subtitles?.length
+            ? formatSubtitleBadgeSummary(file.subtitles)
+            : '';
+          const thumbnailUrl = isSubtitle ? null : getThumbnailUrl(file);
           const isPlayable = file.file_type === 'video' || file.file_type === 'audio';
           const canUnpublishPublic = isPublicBoard && currentUser && (
             file.uploader?.id === currentUser.id || currentUser.role === 'super_admin'
@@ -182,12 +189,22 @@ export default function VideoListView({
                   type="button"
                   onClick={() => isPlayable && handlePlay(file)}
                   disabled={!isPlayable}
-                  className={`relative w-20 h-11 sm:w-24 sm:h-14 rounded overflow-hidden bg-gray-900 flex items-center justify-center flex-shrink-0 group/thumb ${
-                    isPlayable ? 'cursor-pointer' : 'cursor-default'
+                  className={`relative w-20 h-11 sm:w-24 sm:h-14 rounded overflow-hidden flex items-center justify-center flex-shrink-0 group/thumb ${
+                    isSubtitle
+                      ? 'bg-gradient-to-br from-emerald-950/90 to-gray-900 border border-emerald-500/30 cursor-default'
+                      : `bg-gray-900 ${isPlayable ? 'cursor-pointer' : 'cursor-default'}`
                   }`}
                   title={isPlayable ? t('file.play') : displayName}
                 >
-                  {thumbnailUrl ? (
+                  {isSubtitle ? (
+                    <div className="flex flex-col items-center justify-center gap-0.5">
+                      <Subtitles className="w-5 h-5 text-emerald-400" />
+                      <span className="text-[10px] font-semibold text-emerald-200">
+                        {subtitleMeta?.format || 'SRT'}
+                        {subtitleMeta?.lang ? `·${subtitleMeta.shortLabel}` : ''}
+                      </span>
+                    </div>
+                  ) : thumbnailUrl ? (
                     <img
                       src={thumbnailUrl}
                       alt={displayName}
@@ -202,7 +219,7 @@ export default function VideoListView({
                       <Play className="w-4 h-4 text-white" />
                     </div>
                   )}
-                  {file.duration ? (
+                  {!isSubtitle && file.duration ? (
                     <span className="absolute bottom-0.5 right-0.5 bg-black/80 text-white text-[10px] px-1 rounded">
                       {formatDuration(file.duration)}
                     </span>
@@ -240,6 +257,15 @@ export default function VideoListView({
                     {file.file_type === 'video' && file.resolution && (
                       <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-medium">
                         {file.resolution}
+                      </span>
+                    )}
+                    {subtitleBadge && (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 font-medium"
+                        title={t('subtitles.badgeTooltip', { langs: file.subtitles.map((s) => s.shortLabel).join(', ') })}
+                      >
+                        <Subtitles className="w-3 h-3" />
+                        <span>{subtitleBadge}</span>
                       </span>
                     )}
                     {!isPublicBoard && Boolean(file.is_public) && (

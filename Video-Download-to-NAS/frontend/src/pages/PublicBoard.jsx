@@ -10,6 +10,7 @@ import VideoListView from '../components/VideoListView';
 import VideoFolderView from '../components/VideoFolderView';
 import FileBrowseContainer from '../components/FileBrowseContainer';
 import { extractDisplayFilename } from '../utils/folderTree';
+import { attachSubtitlesToFiles } from '../utils/subtitleUtils';
 
 export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShareLinks, onOpenSettings }) {
   const { t } = useTranslation();
@@ -72,9 +73,11 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
     }
   };
 
+  const enrichedFiles = useMemo(() => attachSubtitlesToFiles(files), [files]);
+
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
-    let result = [...files];
+    let result = [...enrichedFiles];
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -92,7 +95,9 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
       });
     }
 
-    if (fileTypeFilter !== 'all') {
+    if (fileTypeFilter === 'all') {
+      result = result.filter((file) => file.file_type !== 'subtitle');
+    } else {
       result = result.filter((file) => file.file_type === fileTypeFilter);
     }
 
@@ -122,7 +127,7 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
     });
 
     return result;
-  }, [files, searchQuery, fileTypeFilter, sortBy]);
+  }, [enrichedFiles, searchQuery, fileTypeFilter, sortBy]);
 
   return (
     <div className="min-h-screen bg-yt-dark text-white p-4">

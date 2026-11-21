@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, Request, Header, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -8,6 +8,7 @@ import hashlib
 from ..database import get_db, User, DownloadedFile, ShareToken
 from ..auth import get_current_user, get_password_hash, verify_password
 from ..permissions import check_permission
+from ..subtitle_helper import find_matching_subtitles, srt_to_webvtt
 
 router = APIRouter(prefix="/api/share-links", tags=["share-links"])
 
@@ -266,7 +267,7 @@ async def access_share_link(
     link.last_accessed_at = datetime.now()
     db.commit()
     
-    # Return file info
+    # Return file info (매칭되는 동반 자막 트랙 포함)
     file = link.file
     return {
         "file": {
@@ -276,7 +277,8 @@ async def access_share_link(
             "file_size": file.file_size,
             "thumbnail": file.thumbnail,
             "duration": file.duration,
-            "original_url": file.original_url
+            "original_url": file.original_url,
+            "subtitles": find_matching_subtitles(db, file)
         },
         "share_info": {
             "title": link.title or file.filename.split('/')[-1],
@@ -459,4 +461,79 @@ async def get_share_link_thumbnail(
     return FileResponse(
         path=thumbnail_path,
         media_type=media_type
+    )
+
+
+@router.get("/subtitle/{token}/{subtitle_id}")
+async def get_share_link_subtitle(
+    token: str,
+    subtitle_id: int,
+    password: Optional[str] = None,
+    db: Session = Depends(get_db),
+    authorization: Optional[str] = Header(None)
+):
+    """공유 링크 대상 영상에 연결된 동반 자막을 WebVTT 형식으로 반환한다 (비회원·비밀번호 공유 지원)."""
+    from pathlib import Path
+
+    current_user = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            from ..auth import verify_token
+            auth_token = authorization.split(" ")[1]
+            payload = verify_token(auth_token)
+            username = payload.get("sub")
+            if username:
+                current_user = db.query(User).filter(User.username == username).first()
+        except Exception as e:
+            print(f"[ShareLink Subtitle] Auth error: {e}")
+
+    link = db.query(ShareToken).filter(ShareToken.token == token).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    if not link.is_active:
+        raise HTTPException(status_code=403, detail="Share link is disabled")
+
+    if link.expires_at and link.expires_at < datetime.now():
+        raise HTTPException(status_code=403, detail="Share link has expired")
+
+    # access_share_link 호출 시 이미 view_count가 1 증가하므로 초과 여부(>)로 검사
+    if link.max_views and link.view_count > link.max_views:
+        raise HTTPException(status_code=403, detail="Share link has reached maximum views")
+
+    if not current_user and not link.allow_anonymous:
+        raise HTTPException(status_code=401, detail="Login required to access this link")
+
+    is_owner = current_user and current_user.id == link.user_id
+    if link.password_hash and not is_owner:
+        if not password:
+            raise HTTPException(status_code=401, detail="Password required")
+        if not verify_password(password, link.password_hash):
+            raise HTTPException(status_code=401, detail="Incorrect password")
+
+    # 요청한 subtitle_id가 반드시 해당 공유 영상의 매칭 자막(또는 공유 파일 자체)인지 검증
+    matching_subs = find_matching_subtitles(db, link.file)
+    allowed_ids = {sub["id"] for sub in matching_subs}
+    if link.file.file_type == "subtitle":
+        allowed_ids.add(link.file.id)
+
+    if subtitle_id not in allowed_ids:
+        raise HTTPException(status_code=403, detail="Subtitle does not match share link")
+
+    subtitle_file = db.query(DownloadedFile).filter(
+        DownloadedFile.id == subtitle_id,
+        DownloadedFile.user_id == link.file.user_id
+    ).first()
+    if not subtitle_file:
+        raise HTTPException(status_code=404, detail="Subtitle file not found")
+
+    file_path = Path("/app/downloads") / subtitle_file.filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Subtitle file not found on disk")
+
+    vtt_content = srt_to_webvtt(file_path.read_bytes())
+    return Response(
+        content=vtt_content,
+        media_type="text/vtt; charset=utf-8",
+        headers={"Cache-Control": "private, max-age=300"},
     )

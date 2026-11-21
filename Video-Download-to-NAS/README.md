@@ -1,5 +1,12 @@
 # Video Download to NAS
 
+## What's New in 1.1.12
+
+- Fixed fullscreen 4-sided letterboxing on lower-resolution or non-16:9 videos by scaling `<video>` with `w-full h-full object-contain`.
+- Added web player subtitle playback with on-the-fly SRT→WebVTT streaming, CC track picker, `C` shortcut toggle, and customizable caption styling (font size, font family, text color, background opacity, and vertical position).
+- Added dedicated **Subtitles** tab in Account Settings for server-wide automatic subtitle co-downloading across Web UI, browser extension, and Telegram bot, plus browser player caption preferences.
+- Hid standalone subtitle items from `All Types`, displayed dedicated subtitle cards (`SRT · KO`, real disk file size) in the `Subtitle` tab, and added `CC` badges to videos with matching subtitles.
+
 ## What's New in 1.1.11
 
 - Added **Grid, List (with sortable column headers), and Folder views** (actual NAS folders plus grouping by Month, Site, or Uploader) to both My Library and Public Board with full file action parity across all views.

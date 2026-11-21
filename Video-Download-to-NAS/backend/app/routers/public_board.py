@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -8,6 +8,12 @@ from pathlib import Path
 from ..database import get_db, User, DownloadedFile
 from ..auth import get_current_user
 from ..permissions import check_permission
+from ..subtitle_helper import (
+    find_matching_subtitles,
+    is_subtitle_accessible_via_public_video,
+    map_subtitles_for_videos,
+    srt_to_webvtt,
+)
 
 router = APIRouter(prefix="/api/public-board", tags=["public-board"])
 
@@ -43,6 +49,9 @@ async def get_public_files(
     # Apply pagination
     offset = (page - 1) * limit
     files = query.order_by(DownloadedFile.created_at.desc()).offset(offset).limit(limit).all()
+
+    # 공개된 영상에 매칭되는 동반 자막 트랙을 일괄 조회
+    subtitles_map = map_subtitles_for_videos(db, files)
     
     # Format response
     result = []
@@ -56,6 +65,7 @@ async def get_public_files(
             "thumbnail": file.thumbnail,
             "duration": file.duration,
             "resolution": file.resolution,
+            "subtitles": subtitles_map.get(file.id, []),
             "public_title": file.public_title or file.filename.split('/')[-1],
             "public_description": file.public_description,
             "created_at": file.created_at,
@@ -165,6 +175,8 @@ async def get_public_file_details(
         "file_size": file.file_size,
         "thumbnail": file.thumbnail,
         "duration": file.duration,
+        "resolution": file.resolution,
+        "subtitles": find_matching_subtitles(db, file),
         "public_title": file.public_title,
         "public_description": file.public_description,
         "created_at": file.created_at,
@@ -206,4 +218,41 @@ async def stream_public_file(
         path=file_path,
         filename=actual_filename,
         media_type='application/octet-stream'
+    )
+
+
+@router.get("/files/{file_id}/subtitle")
+async def get_public_file_subtitle(
+    file_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """공개 게시판 자막 파일(또는 공개 영상에 연결된 동반 자막)을 WebVTT 형식으로 반환한다."""
+    from ..downloader import SUBTITLE_EXTENSIONS
+
+    if not check_permission(current_user, 'can_view_public_board'):
+        raise HTTPException(status_code=403, detail="No permission to view public board")
+
+    file = db.query(DownloadedFile).filter(
+        DownloadedFile.id == file_id
+    ).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="Public subtitle file not found")
+
+    file_path = Path("/app/downloads") / file.filename
+    if file.file_type != "subtitle" and file_path.suffix.lower() not in SUBTITLE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Not a subtitle file")
+
+    if not is_subtitle_accessible_via_public_video(db, file):
+        raise HTTPException(status_code=404, detail="Public subtitle file not found")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Subtitle file not found on disk")
+
+    vtt_content = srt_to_webvtt(file_path.read_bytes())
+    return Response(
+        content=vtt_content,
+        media_type="text/vtt; charset=utf-8",
+        headers={"Cache-Control": "private, max-age=300"},
     )

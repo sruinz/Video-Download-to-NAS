@@ -867,6 +867,52 @@ export const updateFolderOrganization = async (mode) => {
   return response.json();
 };
 
+// === Subtitle Settings ===
+export const getSubtitleSettings = async () => {
+  const response = await fetch('/api/users/me/subtitle-settings', {
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get subtitle settings');
+  }
+
+  return response.json();
+};
+
+export const updateSubtitleSettings = async (settings) => {
+  const response = await fetch('/api/users/me/subtitle-settings', {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(settings)
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'Failed to update subtitle settings');
+  }
+
+  return response.json();
+};
+
+export const getSubtitleTrackUrl = (fileId, isPublicBoard = false) => {
+  if (isPublicBoard) {
+    return `${API_URL}/api/public-board/files/${fileId}/subtitle`;
+  }
+  return `${API_URL}/api/file/${fileId}/subtitle`;
+};
+
+export const getShareSubtitleTrackUrl = (shareToken, subtitleId, sharePassword = null) => {
+  const base = `${API_URL}/api/share-links/subtitle/${shareToken}/${subtitleId}`;
+  return sharePassword ? `${base}?password=${encodeURIComponent(sharePassword)}` : base;
+};
+
 // === Video Metadata ===
 export const startMetadataMigration = async (forceReextract = false) => {
   const response = await fetch(`/api/admin/metadata/migrate?force_reextract=${forceReextract}`, {

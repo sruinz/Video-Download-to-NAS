@@ -297,3 +297,23 @@ class FolderOrganizationResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# Subtitle Settings Models
+class SubtitleSettingsUpdate(BaseModel):
+    """자막 자동 동시 다운로드 설정 업데이트 요청"""
+    auto_download_subtitles: bool = False
+    subtitle_languages: List[str] = Field(default_factory=lambda: ["ko", "en"])
+    subtitle_format: Literal["srt", "vtt"] = "srt"
+    subtitle_include_auto: bool = True
+
+
+class SubtitleSettingsResponse(BaseModel):
+    """자막 자동 동시 다운로드 설정 응답"""
+    auto_download_subtitles: bool
+    subtitle_languages: List[str]
+    subtitle_format: str
+    subtitle_include_auto: bool
+
+    class Config:
+        from_attributes = True

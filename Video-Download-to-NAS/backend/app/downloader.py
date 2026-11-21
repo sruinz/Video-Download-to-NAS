@@ -9,6 +9,11 @@ from pathlib import Path
 from weakref import WeakKeyDictionary
 from sqlalchemy.orm import Session
 from .database import DownloadedFile
+from .subtitle_helper import (
+    build_companion_subtitle_filename,
+    normalize_subtitle_format,
+    parse_subtitle_languages,
+)
 
 DOWNLOADS_DIR = "/app/downloads"
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
@@ -282,6 +287,14 @@ def parse_resolution(resolution: str) -> dict:
 
 def progress_hook(d: dict, download_id: str, user_id: int = None, ws_manager = None, event_loop = None, telegram_notifier = None):
     """Hook to track download progress and send WebSocket updates"""
+    # 영상/오디오 다운로드 중 동반 자막 파일(.srt/.vtt 등)의 진행 이벤트는
+    # 본 영상 완료 상태로 오인되지 않도록 무시한다.
+    hook_filename = d.get('filename', '')
+    hook_ext = Path(hook_filename).suffix.lower() if hook_filename else ''
+    expected_file_type = download_status.get(download_id, {}).get('file_type')
+    if expected_file_type in ('video', 'audio') and hook_ext in SUBTITLE_EXTENSIONS:
+        return
+
     if d['status'] == 'downloading':
         downloaded = d.get('downloaded_bytes', 0)
         total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
@@ -291,6 +304,7 @@ def progress_hook(d: dict, download_id: str, user_id: int = None, ws_manager = N
             eta = d.get('eta', 0)
             
             download_status[download_id] = {
+                **download_status.get(download_id, {}),
                 'status': 'downloading',
                 'progress': progress,
                 'speed': speed,
@@ -412,20 +426,55 @@ async def download_video(
         # Parse resolution options
         options = parse_resolution(resolution)
         file_type = options.pop('file_type', 'video')
+        download_status[download_id]['file_type'] = file_type
 
         # Get current event loop to pass to progress_hook
         loop = asyncio.get_event_loop()
 
         # Base yt-dlp options
+        is_subtitle_only = file_type == 'subtitle'
         ydl_opts = {
             'outtmpl': os.path.join(staging_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [lambda d: progress_hook(d, download_id, user_id, ws_manager, loop, notification_manager)],
-            'writethumbnail': True,
-            'embedthumbnail': True,
+            'writethumbnail': not is_subtitle_only,
+            'embedthumbnail': not is_subtitle_only,
             'noplaylist': False,  # Allow playlist downloads
             'yes_playlist': True,  # Download entire playlist if URL is a playlist
             **options
         }
+
+        # 사용자 계정에 자막 자동 동시 다운로드가 활성화된 경우 영상 다운로드에 자막 옵션을 함께 주입한다.
+        if file_type == 'video' and user and getattr(user, 'auto_download_subtitles', 0):
+            subtitle_langs = parse_subtitle_languages(
+                getattr(user, 'subtitle_languages', 'ko,en')
+            )
+            if subtitle_langs:
+                subtitle_fmt = normalize_subtitle_format(
+                    getattr(user, 'subtitle_format', 'srt')
+                )
+                include_auto = bool(
+                    1 if getattr(user, 'subtitle_include_auto', 1) is None else getattr(user, 'subtitle_include_auto', 1)
+                )
+                ydl_opts['writesubtitles'] = True
+                ydl_opts['writeautomaticsub'] = include_auto
+                ydl_opts['subtitleslangs'] = subtitle_langs
+                ydl_opts['subtitlesformat'] = f'{subtitle_fmt}/vtt/srt/best'
+                # 다중 언어 자막 요청 시 YouTube timedtext 429 제한을 완화하기 위해 요청 간 대기 시간 추가
+                if len(subtitle_langs) > 1:
+                    ydl_opts['sleep_interval_subtitles'] = 2
+                postprocessors = list(ydl_opts.get('postprocessors', []))
+                postprocessors.append({
+                    'key': 'FFmpegSubtitlesConvertor',
+                    'format': subtitle_fmt,
+                })
+                ydl_opts['postprocessors'] = postprocessors
+                logger.info(
+                    "Auto subtitle co-download enabled for user %s: langs=%s format=%s include_auto=%s",
+                    user_id,
+                    subtitle_langs,
+                    subtitle_fmt,
+                    include_auto,
+                )
         
         # 프록시 설정 (WARP, SOCKS5, HTTP, VPN 등 모든 프록시 지원)
         proxy_url = os.getenv('PROXY')
@@ -480,16 +529,56 @@ async def download_video(
             result['filename'],
             expected_extension,
         )
-        output_filename = requested_filename if len(output_paths) == 1 else None
-        moved_paths = [
-            _move_download_to_output(
-                str(output_path),
+        non_subtitle_outputs = [
+            path for path in output_paths
+            if path.suffix.lower() not in SUBTITLE_EXTENSIONS
+        ]
+        is_single_media_with_subtitles = (
+            len(non_subtitle_outputs) == 1
+            and output_paths[0].suffix.lower() not in SUBTITLE_EXTENSIONS
+        )
+
+        moved_paths = []
+        if is_single_media_with_subtitles:
+            primary_source = output_paths[0]
+            primary_moved = _move_download_to_output(
+                str(primary_source),
                 user_download_dir,
-                output_filename,
+                requested_filename,
                 download_id,
             )
-            for output_path in output_paths
-        ]
+            moved_paths.append(primary_moved)
+            primary_dest_stem = Path(primary_moved).stem
+
+            for companion_path in output_paths[1:]:
+                if companion_path.suffix.lower() in SUBTITLE_EXTENSIONS:
+                    companion_requested = build_companion_subtitle_filename(
+                        companion_path.name,
+                        primary_source.stem,
+                        primary_dest_stem,
+                    )
+                else:
+                    companion_requested = None
+                moved_paths.append(
+                    _move_download_to_output(
+                        str(companion_path),
+                        user_download_dir,
+                        companion_requested,
+                        download_id,
+                    )
+                )
+        else:
+            output_filename = requested_filename if len(output_paths) == 1 else None
+            moved_paths = [
+                _move_download_to_output(
+                    str(output_path),
+                    user_download_dir,
+                    output_filename,
+                    download_id,
+                )
+                for output_path in output_paths
+            ]
+
         full_path = moved_paths[0]
         cleanup_staging = True
         result['filename'] = full_path
@@ -510,50 +599,64 @@ async def download_video(
             actual_file_type = 'video'
         elif file_extension in SUBTITLE_EXTENSIONS:
             actual_file_type = 'subtitle'
+
+        # 실제 디스크 크기를 우선 사용 (자막 전용 다운로드 시 filesize가 None인 문제 해결)
+        actual_file_size = (
+            os.path.getsize(full_path)
+            if os.path.exists(full_path)
+            else result.get('filesize')
+        )
         
-        # Check for existing file with same URL and extension (for duplicate prevention)
-        # Only update if the file extension matches (same format)
-        existing_file = db.query(DownloadedFile).filter(
-            DownloadedFile.original_url == url,
-            DownloadedFile.user_id == user_id
-        ).first()
+        # Check for existing file (for duplicate prevention)
+        if actual_file_type == 'subtitle':
+            existing_file = db.query(DownloadedFile).filter(
+                DownloadedFile.filename == relative_path,
+                DownloadedFile.user_id == user_id
+            ).first()
+            should_update = existing_file is not None
+        else:
+            existing_file = db.query(DownloadedFile).filter(
+                DownloadedFile.original_url == url,
+                DownloadedFile.user_id == user_id,
+                DownloadedFile.file_type == actual_file_type
+            ).first()
+            should_update = False
+            if existing_file:
+                existing_ext = os.path.splitext(existing_file.filename)[1].lower()
+                if existing_ext == file_extension:
+                    should_update = True
+                    print(f"[Download] Same extension detected, updating existing file: {existing_file.id}")
+                else:
+                    print(f"[Download] Different extension ({existing_ext} vs {file_extension}), creating new record")
         
-        should_update = False
-        if existing_file:
-            # Check if extensions match
-            existing_ext = os.path.splitext(existing_file.filename)[1].lower()
-            if existing_ext == file_extension:
-                should_update = True
-                print(f"[Download] Same extension detected, updating existing file: {existing_file.id}")
-            else:
-                print(f"[Download] Different extension ({existing_ext} vs {file_extension}), creating new record")
-        
-        # Find local thumbnail file (yt-dlp saves it with same name as video)
-        # yt-dlp saves thumbnail as: video_name.webp, video_name.jpg, etc.
-        local_thumbnail = None
-        video_stem = os.path.splitext(full_path)[0]  # /path/to/video (without extension)
-        thumbnail_extensions = ['.webp', '.jpg', '.jpeg', '.png', '.gif']
-        for thumb_ext in thumbnail_extensions:
-            potential_thumb = video_stem + thumb_ext
-            if os.path.exists(potential_thumb):
-                local_thumbnail = os.path.relpath(potential_thumb, DOWNLOADS_DIR)
-                print(f"[Download] Found local thumbnail: {local_thumbnail}")
-                break
-        
-        # Use local thumbnail path if found, otherwise use URL from yt-dlp
-        thumbnail_value = local_thumbnail if local_thumbnail else result.get('thumbnail')
-        
-        # Extract metadata
-        metadata = result.get('metadata', {})
+        if actual_file_type == 'subtitle':
+            thumbnail_value = None
+            duration_value = None
+            metadata = {}
+        else:
+            # Find local thumbnail file (yt-dlp saves it with same name as video)
+            local_thumbnail = None
+            video_stem = os.path.splitext(full_path)[0]
+            thumbnail_extensions = ['.webp', '.jpg', '.jpeg', '.png', '.gif']
+            for thumb_ext in thumbnail_extensions:
+                potential_thumb = video_stem + thumb_ext
+                if os.path.exists(potential_thumb):
+                    local_thumbnail = os.path.relpath(potential_thumb, DOWNLOADS_DIR)
+                    print(f"[Download] Found local thumbnail: {local_thumbnail}")
+                    break
+
+            thumbnail_value = local_thumbnail if local_thumbnail else result.get('thumbnail')
+            duration_value = _duration_in_seconds(result.get('duration'))
+            metadata = result.get('metadata', {})
         
         # Update existing file or create new one
         if should_update:
             # Update existing record
             existing_file.filename = relative_path
             existing_file.file_type = actual_file_type
-            existing_file.file_size = result.get('filesize')
+            existing_file.file_size = actual_file_size
             existing_file.thumbnail = thumbnail_value
-            existing_file.duration = _duration_in_seconds(result.get('duration'))
+            existing_file.duration = duration_value
             # Update metadata fields
             existing_file.resolution = metadata.get('resolution')
             existing_file.video_codec = metadata.get('video_codec')
@@ -568,9 +671,9 @@ async def download_video(
                 filename=relative_path,
                 original_url=url,
                 file_type=actual_file_type,
-                file_size=result.get('filesize'),
+                file_size=actual_file_size,
                 thumbnail=thumbnail_value,
-                duration=_duration_in_seconds(result.get('duration')),
+                duration=duration_value,
                 resolution=metadata.get('resolution'),
                 video_codec=metadata.get('video_codec'),
                 audio_codec=metadata.get('audio_codec'),
@@ -579,6 +682,38 @@ async def download_video(
                 user_id=user_id
             )
             db.add(file_info)
+
+        # 함께 다운로드된 동반 자막 파일들을 라이브러리에 개별 등록한다.
+        for companion_moved_path in moved_paths[1:]:
+            companion_ext = Path(companion_moved_path).suffix.lower()
+            if companion_ext not in SUBTITLE_EXTENSIONS:
+                continue
+            companion_relative = os.path.relpath(companion_moved_path, DOWNLOADS_DIR)
+            companion_size = (
+                os.path.getsize(companion_moved_path)
+                if os.path.exists(companion_moved_path)
+                else None
+            )
+            existing_subtitle = db.query(DownloadedFile).filter(
+                DownloadedFile.filename == companion_relative,
+                DownloadedFile.user_id == user_id
+            ).first()
+            if existing_subtitle:
+                existing_subtitle.original_url = url
+                existing_subtitle.file_type = 'subtitle'
+                existing_subtitle.file_size = companion_size
+                existing_subtitle.thumbnail = None
+                existing_subtitle.duration = None
+            else:
+                db.add(DownloadedFile(
+                    filename=companion_relative,
+                    original_url=url,
+                    file_type='subtitle',
+                    file_size=companion_size,
+                    thumbnail=None,
+                    duration=None,
+                    user_id=user_id
+                ))
         
         db.commit()
         db.refresh(file_info)
@@ -607,7 +742,7 @@ async def download_video(
                     download_id,
                     os.path.basename(relative_path),
                     file_info.id,
-                    result.get('filesize', 0)
+                    actual_file_size or 0
                 )
             except Exception as e:
                 print(f"[WebSocket] Error sending download_completed: {e}")
@@ -620,7 +755,7 @@ async def download_video(
                 await notification_manager.send_download_complete_notification(
                     user_id=user_id,
                     filename=os.path.basename(relative_path),
-                    file_size=result.get('filesize', 0),
+                    file_size=actual_file_size or 0,
                     download_id=download_id
                 )
                 # 알림 전송 완료 표시
@@ -689,12 +824,34 @@ async def download_video(
             except OSError:
                 pass
 
+def _create_youtube_dl(ydl_opts: dict):
+    """영상+자막 동시 다운로드 시 자막 실패(예: YouTube 429)로 영상 다운로드가 중단되지 않는 YoutubeDL 인스턴스를 생성한다."""
+    base_cls = yt_dlp.YoutubeDL
+    is_co_download = (
+        not ydl_opts.get('skip_download')
+        and (ydl_opts.get('writesubtitles') or ydl_opts.get('writeautomaticsub'))
+    )
+    if not is_co_download or not isinstance(base_cls, type):
+        return base_cls(ydl_opts)
+
+    class _ResilientSubtitleYoutubeDL(base_cls):
+        def _write_subtitles(self, info_dict, filename):
+            original_ignore = self.params.get('ignoreerrors', False)
+            try:
+                self.params['ignoreerrors'] = True
+                return super()._write_subtitles(info_dict, filename)
+            finally:
+                self.params['ignoreerrors'] = original_ignore
+
+    return _ResilientSubtitleYoutubeDL(ydl_opts)
+
+
 def _download_with_ydl(ydl_opts: dict, url: str) -> dict:
     """Helper function to run yt-dlp download"""
     import os
     from pathlib import Path
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with _create_youtube_dl(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         expected_filename = ydl.prepare_filename(info)
         

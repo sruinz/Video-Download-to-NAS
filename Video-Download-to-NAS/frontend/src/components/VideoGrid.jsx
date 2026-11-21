@@ -13,11 +13,13 @@ import {
   Info,
   User,
   Calendar,
-  X
+  X,
+  Subtitles
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFileActions } from '../hooks/useFileActions';
 import { extractDisplayFilename } from '../utils/folderTree';
+import { formatSubtitleBadgeSummary, parseSubtitleInfo } from '../utils/subtitleUtils';
 
 export default function VideoGrid({
   files,
@@ -77,7 +79,12 @@ export default function VideoGrid({
         const displayName = isPublicBoard
           ? (file.public_title || extractDisplayFilename(file.filename))
           : extractDisplayFilename(file.filename);
-        const thumbnailUrl = getThumbnailUrl(file);
+        const isSubtitle = file.file_type === 'subtitle';
+        const subtitleMeta = isSubtitle ? (file.subtitleMeta || parseSubtitleInfo(file.filename)) : null;
+        const subtitleBadge = !isSubtitle && file.subtitles?.length
+          ? formatSubtitleBadgeSummary(file.subtitles)
+          : '';
+        const thumbnailUrl = isSubtitle ? null : getThumbnailUrl(file);
         const canUnpublishPublic = isPublicBoard && currentUser && (
           file.uploader?.id === currentUser.id || currentUser.role === 'super_admin'
         );
@@ -90,8 +97,28 @@ export default function VideoGrid({
             }`}
           >
             {/* Thumbnail / Icon */}
-            <div className="aspect-video bg-yt-dark flex items-center justify-center relative">
-              {thumbnailUrl ? (
+            <div className={`aspect-video flex items-center justify-center relative ${
+              isSubtitle
+                ? 'bg-gradient-to-br from-emerald-950/90 via-gray-900 to-gray-950'
+                : 'bg-yt-dark'
+            }`}>
+              {isSubtitle ? (
+                <div className="flex flex-col items-center justify-center gap-2 text-center px-3">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                    <Subtitles className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-emerald-600/30 border border-emerald-500/40 text-emerald-200 text-xs font-semibold">
+                      {subtitleMeta?.format || 'SRT'}
+                    </span>
+                    {subtitleMeta?.lang && (
+                      <span className="px-2 py-0.5 rounded bg-gray-800/90 border border-gray-600 text-gray-200 text-xs font-semibold">
+                        {subtitleMeta.shortLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : thumbnailUrl ? (
                 <img
                   src={thumbnailUrl}
                   alt={displayName}
@@ -121,8 +148,19 @@ export default function VideoGrid({
                 </div>
               )}
 
+              {/* Attached Subtitles CC badge */}
+              {subtitleBadge && (
+                <div
+                  className="absolute bottom-2 left-2 bg-emerald-600/90 text-white px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1 shadow"
+                  title={t('subtitles.badgeTooltip', { langs: file.subtitles.map((s) => s.shortLabel).join(', ') })}
+                >
+                  <Subtitles className="w-3.5 h-3.5" />
+                  <span>{subtitleBadge}</span>
+                </div>
+              )}
+
               {/* Duration badge */}
-              {file.duration && (
+              {!isSubtitle && file.duration && (
                 <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs font-semibold">
                   {formatDuration(file.duration)}
                 </div>

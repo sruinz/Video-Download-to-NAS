@@ -4,7 +4,24 @@ from typing import List
 from datetime import datetime
 
 from ..database import get_db, User
-from ..models import UserRegister, UserInfo, UserUpdate, UserRoleUpdate, UserQuotaUpdate, UserRateLimitUpdate, FolderOrganizationUpdate, FolderOrganizationResponse
+from ..models import (
+    UserRegister,
+    UserInfo,
+    UserUpdate,
+    UserRoleUpdate,
+    UserQuotaUpdate,
+    UserRateLimitUpdate,
+    FolderOrganizationUpdate,
+    FolderOrganizationResponse,
+    SubtitleSettingsUpdate,
+    SubtitleSettingsResponse,
+)
+from ..subtitle_helper import (
+    parse_subtitle_languages,
+    serialize_subtitle_languages,
+    normalize_subtitle_format,
+    SUPPORTED_SUBTITLE_FORMATS,
+)
 from ..auth import get_password_hash, verify_password, get_current_user, require_role
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -537,6 +554,63 @@ async def update_folder_organization(
     logger.info(f"[Folder Organization] Successfully updated folder mode for user {current_user.username} to: {current_user.folder_organization_mode}")
     
     return FolderOrganizationResponse(mode=current_user.folder_organization_mode)
+
+
+# === Subtitle Settings ===
+
+@router.get("/me/subtitle-settings", response_model=SubtitleSettingsResponse)
+async def get_subtitle_settings(
+    current_user: User = Depends(get_current_user)
+):
+    """현재 사용자의 자막 자동 동시 다운로드 설정을 조회한다."""
+    languages = parse_subtitle_languages(current_user.subtitle_languages)
+    if not languages:
+        languages = ["ko", "en"]
+    return SubtitleSettingsResponse(
+        auto_download_subtitles=bool(current_user.auto_download_subtitles),
+        subtitle_languages=languages,
+        subtitle_format=normalize_subtitle_format(current_user.subtitle_format),
+        subtitle_include_auto=bool(
+            1 if current_user.subtitle_include_auto is None else current_user.subtitle_include_auto
+        ),
+    )
+
+
+@router.patch("/me/subtitle-settings", response_model=SubtitleSettingsResponse)
+async def update_subtitle_settings(
+    subtitle_update: SubtitleSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """현재 사용자의 자막 자동 동시 다운로드 설정을 저장한다."""
+    fmt = subtitle_update.subtitle_format.strip().lower()
+    if fmt not in SUPPORTED_SUBTITLE_FORMATS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid subtitle format. Must be 'srt' or 'vtt'.",
+        )
+
+    cleaned_languages = parse_subtitle_languages(subtitle_update.subtitle_languages)
+    if subtitle_update.auto_download_subtitles and not cleaned_languages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one valid subtitle language must be selected.",
+        )
+
+    current_user.auto_download_subtitles = 1 if subtitle_update.auto_download_subtitles else 0
+    current_user.subtitle_languages = serialize_subtitle_languages(cleaned_languages or ["ko", "en"])
+    current_user.subtitle_format = fmt
+    current_user.subtitle_include_auto = 1 if subtitle_update.subtitle_include_auto else 0
+
+    db.commit()
+    db.refresh(current_user)
+
+    return SubtitleSettingsResponse(
+        auto_download_subtitles=bool(current_user.auto_download_subtitles),
+        subtitle_languages=parse_subtitle_languages(current_user.subtitle_languages),
+        subtitle_format=normalize_subtitle_format(current_user.subtitle_format),
+        subtitle_include_auto=bool(current_user.subtitle_include_auto),
+    )
 
 
 # === Admin User Management ===

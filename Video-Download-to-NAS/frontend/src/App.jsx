@@ -11,6 +11,7 @@ import VideoFolderView from './components/VideoFolderView';
 import FileBrowseContainer from './components/FileBrowseContainer';
 import LibraryFilters from './components/LibraryFilters';
 import { extractDisplayFilename } from './utils/folderTree';
+import { attachSubtitlesToFiles } from './utils/subtitleUtils';
 import Settings from './pages/Settings';
 import PublicBoard from './pages/PublicBoard';
 import ShareLinksManagement from './pages/ShareLinksManagement';
@@ -211,9 +212,12 @@ function App() {
     setFiles(files.filter(f => f.id !== fileId));
   };
 
+  // 영상에 매칭된 자막 트랙을 연결한다.
+  const enrichedFiles = useMemo(() => attachSubtitlesToFiles(files), [files]);
+
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
-    let result = [...files];
+    let result = [...enrichedFiles];
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -223,8 +227,10 @@ function App() {
       );
     }
 
-    // Apply file type filter
-    if (fileTypeFilter !== 'all') {
+    // Apply file type filter ('all'에서는 독립 자막을 숨기고 자막 탭에서만 단독 표시)
+    if (fileTypeFilter === 'all') {
+      result = result.filter(file => file.file_type !== 'subtitle');
+    } else {
       result = result.filter(file => file.file_type === fileTypeFilter);
     }
 
@@ -255,7 +261,7 @@ function App() {
     });
 
     return result;
-  }, [files, searchQuery, fileTypeFilter, sortBy]);
+  }, [enrichedFiles, searchQuery, fileTypeFilter, sortBy]);
 
   // Check if this is a share link access
   const path = window.location.pathname;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   Play,
@@ -16,17 +16,27 @@ import {
   ExternalLink,
   Repeat,
   Repeat1,
-  Shuffle
+  Shuffle,
+  Subtitles,
+  Check
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getSubtitleTrackUrl, getShareSubtitleTrackUrl } from '../../api';
 import {
   getNextRepeatMode,
   resolveNextTrack,
   resolvePreviousTrack
 } from '../../utils/playbackOrder';
+import {
+  getPlayerSubtitlePrefs,
+  pickDefaultSubtitleTrack,
+  buildSubtitleOverlayStyle,
+  cleanCueText,
+  SUBTITLE_POSITION_BOTTOM_CSS
+} from '../../utils/subtitleUtils';
 
 export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex, onClose, setModalState }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const videoRef = useRef(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -39,6 +49,13 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
   const [showControls, setShowControls] = useState(true);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+  const [subtitlePrefs, setSubtitlePrefs] = useState(() => getPlayerSubtitlePrefs());
+  const [activeSubtitleId, setActiveSubtitleId] = useState(null);
+  const [subtitleBlobUrl, setSubtitleBlobUrl] = useState(null);
+  const [activeCueLines, setActiveCueLines] = useState([]);
+  const trackRef = useRef(null);
+  const lastSubtitleIdRef = useRef(null);
   const [repeatMode, setRepeatMode] = useState(() => {
     const saved = localStorage.getItem('videoPlayerRepeatMode');
     return ['off', 'all', 'one'].includes(saved) ? saved : 'off';
@@ -50,6 +67,155 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
   const clickTimeoutRef = useRef(null);
   const shuffleVisitedRef = useRef([]);
   const shuffleHistoryRef = useRef([]);
+
+  const availableSubtitles = useMemo(
+    () => (Array.isArray(file?.subtitles) ? file.subtitles : []),
+    [file]
+  );
+
+  const activeSubtitleTrack = useMemo(
+    () => availableSubtitles.find((track) => track.id === activeSubtitleId) || null,
+    [availableSubtitles, activeSubtitleId]
+  );
+
+  const readActiveCues = () => {
+    const trackEl = trackRef.current;
+    const textTrack = trackEl?.track;
+    if (!textTrack || !activeSubtitleId) {
+      setActiveCueLines([]);
+      return;
+    }
+    const cues = textTrack.activeCues ? Array.from(textTrack.activeCues) : [];
+    const lines = cues.map((cue) => cleanCueText(cue.text)).filter(Boolean);
+    setActiveCueLines(lines);
+  };
+
+  const syncTextTrackMode = () => {
+    const video = videoRef.current;
+    if (!video || !video.textTracks) return;
+    for (let i = 0; i < video.textTracks.length; i += 1) {
+      // 'hidden' 모드로 파싱 및 cuechange 이벤트만 수신하고 커스텀 오버레이로 일관되게 렌더링
+      video.textTracks[i].mode = activeSubtitleId ? 'hidden' : 'disabled';
+    }
+    readActiveCues();
+  };
+
+  // 전체화면 상태 동기화 (ESC / F 키 포함)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // 영상 변경 시 사용자 자막 표시 설정에 따라 기본 자막 트랙 자동 선택
+  useEffect(() => {
+    if (!isOpen || !file) return;
+    const prefs = getPlayerSubtitlePrefs();
+    setSubtitlePrefs(prefs);
+    setShowSubtitleMenu(false);
+
+    if (file.file_type !== 'audio' && availableSubtitles.length > 0) {
+      const picked = pickDefaultSubtitleTrack(availableSubtitles, prefs, i18n.language);
+      const nextId = picked ? picked.id : null;
+      setActiveSubtitleId(nextId);
+      if (nextId) lastSubtitleIdRef.current = nextId;
+    } else {
+      setActiveSubtitleId(null);
+    }
+  }, [isOpen, file, availableSubtitles, i18n.language]);
+
+  // 선택된 자막 트랙을 인증 요청으로 불러와 WebVTT Blob URL로 연결
+  useEffect(() => {
+    if (!isOpen || !file || !activeSubtitleId || file.file_type === 'audio') {
+      setSubtitleBlobUrl(null);
+      syncTextTrackMode();
+      return undefined;
+    }
+
+    let cancelled = false;
+    let objectUrl = null;
+
+    const loadSubtitle = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = {};
+        let url;
+
+        if (file.shareToken) {
+          url = getShareSubtitleTrackUrl(file.shareToken, activeSubtitleId, file.sharePassword);
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+        } else {
+          if (!token) return;
+          url = getSubtitleTrackUrl(activeSubtitleId, Boolean(file.fromPublicBoard));
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(url, { headers });
+        if (!response.ok) throw new Error('Failed to load subtitle');
+        const vttText = await response.text();
+        if (cancelled) return;
+        const blob = new Blob([vttText], { type: 'text/vtt; charset=utf-8' });
+        objectUrl = URL.createObjectURL(blob);
+        setSubtitleBlobUrl(objectUrl);
+      } catch (error) {
+        console.error('Failed to load subtitle track:', error);
+        if (!cancelled) {
+          setSubtitleBlobUrl(null);
+        }
+      }
+    };
+
+    loadSubtitle();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [isOpen, file, activeSubtitleId]);
+
+  useEffect(() => {
+    if (!subtitleBlobUrl || !activeSubtitleId) {
+      setActiveCueLines([]);
+      syncTextTrackMode();
+      return undefined;
+    }
+
+    syncTextTrackMode();
+    const trackEl = trackRef.current;
+    const textTrack = trackEl?.track;
+    if (!textTrack) return undefined;
+
+    const handleCueChange = () => readActiveCues();
+    textTrack.addEventListener('cuechange', handleCueChange);
+    return () => {
+      textTrack.removeEventListener('cuechange', handleCueChange);
+    };
+  }, [subtitleBlobUrl, activeSubtitleId]);
+
+  const toggleSubtitlesShortcut = () => {
+    if (availableSubtitles.length === 0) return;
+    setActiveSubtitleId((prev) => {
+      if (prev) {
+        lastSubtitleIdRef.current = prev;
+        return null;
+      }
+      if (lastSubtitleIdRef.current && availableSubtitles.some((s) => s.id === lastSubtitleIdRef.current)) {
+        return lastSubtitleIdRef.current;
+      }
+      const picked = pickDefaultSubtitleTrack(
+        availableSubtitles,
+        { ...subtitlePrefs, autoShow: true },
+        i18n.language
+      );
+      return picked ? picked.id : availableSubtitles[0].id;
+    });
+  };
 
   useEffect(() => {
     localStorage.setItem('videoPlayerRepeatMode', repeatMode);
@@ -322,6 +488,11 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
           video.muted = !video.muted;
           setIsMuted(video.muted);
           break;
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          toggleSubtitlesShortcut();
+          break;
         case 'Escape':
           if (document.fullscreenElement) {
             e.preventDefault();
@@ -337,7 +508,7 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, availableSubtitles, subtitlePrefs, i18n.language]);
 
   // Hide controls after inactivity
   useEffect(() => {
@@ -431,6 +602,7 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
+      syncTextTrackMode();
     }
   };
 
@@ -508,50 +680,89 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
             />
           </div>
         ) : (
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            poster={
-              file.thumbnail 
-                ? (file.thumbnail.startsWith('http') 
-                    ? file.thumbnail 
-                    : `/api/thumbnail/${file.id}?token=${localStorage.getItem('token') || file.sharePassword || ''}`)
-                : undefined
-            }
-            className="max-w-full max-h-full"
-            style={{ cursor: showControls ? 'default' : 'none' }}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onWaiting={() => setIsBuffering(true)}
-            onCanPlay={() => setIsBuffering(false)}
-            onEnded={() => goToNext(true)}
-            onClick={(e) => {
-              e.stopPropagation();
-              // Clear any existing click timeout
-              if (clickTimeoutRef.current) {
-                clearTimeout(clickTimeoutRef.current);
-                clickTimeoutRef.current = null;
+          <>
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              poster={
+                file.thumbnail 
+                  ? (file.thumbnail.startsWith('http') 
+                      ? file.thumbnail 
+                      : `/api/thumbnail/${file.id}?token=${localStorage.getItem('token') || file.sharePassword || ''}`)
+                  : undefined
               }
-              
-              // Set timeout for single click
-              clickTimeoutRef.current = setTimeout(() => {
-                togglePlayPause();
-                clickTimeoutRef.current = null;
-              }, 250);
-            }}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              // Cancel single click action
-              if (clickTimeoutRef.current) {
-                clearTimeout(clickTimeoutRef.current);
-                clickTimeoutRef.current = null;
-              }
-              // Only toggle fullscreen
-              toggleFullscreen();
-            }}
-          />
+              className="vdtn-player-video w-full h-full object-contain"
+              style={{ cursor: showControls ? 'default' : 'none' }}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onTimeUpdate={handleTimeUpdate}
+              onSeeked={readActiveCues}
+              onLoadedMetadata={handleLoadedMetadata}
+              onWaiting={() => setIsBuffering(true)}
+              onCanPlay={() => setIsBuffering(false)}
+              onEnded={() => goToNext(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Clear any existing click timeout
+                if (clickTimeoutRef.current) {
+                  clearTimeout(clickTimeoutRef.current);
+                  clickTimeoutRef.current = null;
+                }
+                
+                // Set timeout for single click
+                clickTimeoutRef.current = setTimeout(() => {
+                  togglePlayPause();
+                  clickTimeoutRef.current = null;
+                }, 250);
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                // Cancel single click action
+                if (clickTimeoutRef.current) {
+                  clearTimeout(clickTimeoutRef.current);
+                  clickTimeoutRef.current = null;
+                }
+                // Only toggle fullscreen
+                toggleFullscreen();
+              }}
+            >
+              {subtitleBlobUrl && activeSubtitleTrack && (
+                <track
+                  ref={trackRef}
+                  key={activeSubtitleTrack.id}
+                  kind="subtitles"
+                  src={subtitleBlobUrl}
+                  srcLang={activeSubtitleTrack.lang || 'und'}
+                  label={activeSubtitleTrack.shortLabel || 'CC'}
+                  default
+                  onLoad={syncTextTrackMode}
+                />
+              )}
+            </video>
+
+            {/* Custom Styled Subtitle Overlay (글꼴·크기·색상·배경 투명도·위치 일관 지원) */}
+            {activeSubtitleId && activeCueLines.length > 0 && (
+              <div
+                className="absolute inset-x-4 sm:inset-x-10 flex flex-col items-center gap-1 pointer-events-none select-none z-[5] transition-all duration-200"
+                style={{
+                  bottom:
+                    showControls && subtitlePrefs.position === 'low'
+                      ? 'max(5%, 76px)'
+                      : (SUBTITLE_POSITION_BOTTOM_CSS[subtitlePrefs.position] || '10%')
+                }}
+              >
+                {activeCueLines.map((line, idx) => (
+                  <div
+                    key={`${idx}-${line.slice(0, 16)}`}
+                    className="max-w-[90%] text-center rounded leading-snug whitespace-pre-line"
+                    style={buildSubtitleOverlayStyle(subtitlePrefs)}
+                  >
+                    {line}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Buffering Indicator */}
@@ -714,6 +925,60 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
               </div>
 
               <div className="flex items-center gap-2 sm:gap-4">
+                {/* Subtitles / CC selector (if video has matching subtitles) */}
+                {file.file_type !== 'audio' && availableSubtitles.length > 0 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowSubtitleMenu((prev) => !prev)}
+                      className={`hover:text-yt-red transition-colors flex items-center gap-1 ${
+                        activeSubtitleId ? 'text-yt-red' : ''
+                      }`}
+                      title={t('player.subtitlesToggle')}
+                    >
+                      <Subtitles className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+
+                    {showSubtitleMenu && (
+                      <div className="absolute bottom-10 right-0 w-44 bg-black/95 border border-gray-700 rounded-lg shadow-xl py-1.5 z-30 text-sm">
+                        <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800">
+                          {t('player.subtitleTrack')}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSubtitleId(null);
+                            setShowSubtitleMenu(false);
+                          }}
+                          className="w-full px-3 py-1.5 text-left hover:bg-white/10 flex items-center justify-between text-xs"
+                        >
+                          <span>{t('player.subtitlesOff')}</span>
+                          {!activeSubtitleId && <Check className="w-3.5 h-3.5 text-yt-red" />}
+                        </button>
+                        {availableSubtitles.map((track) => (
+                          <button
+                            key={track.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveSubtitleId(track.id);
+                              lastSubtitleIdRef.current = track.id;
+                              setShowSubtitleMenu(false);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-white/10 flex items-center justify-between text-xs"
+                          >
+                            <span className="truncate">
+                              {track.shortLabel} ({track.format})
+                            </span>
+                            {activeSubtitleId === track.id && (
+                              <Check className="w-3.5 h-3.5 text-yt-red flex-shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Shuffle (if playlist has multiple items) */}
                 {hasMultipleTracks && (
                   <button
@@ -783,6 +1048,7 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
               <div><kbd className="px-1 bg-white/20 rounded">↑↓</kbd> Volume</div>
               <div><kbd className="px-1 bg-white/20 rounded">F</kbd> Fullscreen</div>
               <div><kbd className="px-1 bg-white/20 rounded">M</kbd> Mute</div>
+              <div><kbd className="px-1 bg-white/20 rounded">C</kbd> {t('player.subtitles')}</div>
               <div><kbd className="px-1 bg-white/20 rounded">ESC</kbd> Close</div>
             </div>
           </div>

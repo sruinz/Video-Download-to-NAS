@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.12] - 2026-11-21
+
+### Fixed
+- Fixed fullscreen 4-sided letterboxing on lower-resolution or non-16:9 aspect-ratio videos (e.g., 592p, 21:9, 10:9) by scaling `<video>` with `w-full h-full object-contain`
+- Fixed standalone subtitle downloads saving `file_size` as `None` ("Unknown") and copying video thumbnails/duration onto subtitle records
+
+### Added
+- Added built-in web player subtitle playback across My Library, Public Board, and Share Links (including anonymous/password-protected shares) with on-the-fly SRT→WebVTT streaming, automatic companion subtitle matching, CC track picker, `C` keyboard shortcut, and customizable caption styling (font size, font family, text color, background opacity, and vertical position)
+- Added dedicated **Subtitles** tab in Account Settings for server-wide automatic subtitle co-downloading (multi-language selection, SRT/VTT format, auto-generated captions) across Web UI, browser extension, and Telegram bot, alongside browser player display preferences
+- Improved library organization by hiding standalone subtitle items from `All Types`, rendering a clean `CC` language badge on videos with matching subtitles, and displaying dedicated subtitle cards (`SRT · KO`) in the `Subtitle` tab
+
 ## [1.1.11] - 2026-11-21
 
 ### Added

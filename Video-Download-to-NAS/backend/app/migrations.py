@@ -942,3 +942,37 @@ def migrate_video_metadata_schema(db: Session):
         "added_columns": added_count,
         "message": f"Video metadata schema migration completed ({added_count} columns added)"
     }
+
+
+def migrate_subtitle_settings_schema(db: Session):
+    """사용자별 자막 자동 동시 다운로드 설정 컬럼을 추가한다 (멱등성 보장)."""
+    engine = db.get_bind()
+    logger.info("Starting subtitle settings schema migration...")
+
+    subtitle_columns = [
+        ("auto_download_subtitles", "INTEGER DEFAULT 0 NOT NULL"),
+        ("subtitle_languages", "VARCHAR(200) DEFAULT 'ko,en' NOT NULL"),
+        ("subtitle_format", "VARCHAR(20) DEFAULT 'srt' NOT NULL"),
+        ("subtitle_include_auto", "INTEGER DEFAULT 1 NOT NULL"),
+    ]
+
+    added_count = 0
+    for column_name, column_def in subtitle_columns:
+        if not column_exists(engine, "users", column_name):
+            logger.info(f"Adding {column_name} column to users table...")
+            db.execute(text(f"""
+                ALTER TABLE users
+                ADD COLUMN {column_name} {column_def}
+            """))
+            db.commit()
+            logger.info(f"✓ Added {column_name} column")
+            added_count += 1
+        else:
+            logger.info(f"✓ {column_name} column already exists")
+
+    logger.info("Subtitle settings schema migration completed successfully!")
+    return {
+        "success": True,
+        "added_columns": added_count,
+        "message": f"Subtitle settings schema migration completed ({added_count} columns added)",
+    }

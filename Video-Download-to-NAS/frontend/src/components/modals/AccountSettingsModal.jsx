@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Key, Save, Shield, Link as LinkIcon, Unlink, CheckCircle, Code, Copy, Trash2, Plus, AlertCircle } from 'lucide-react';
+import { X, User, Mail, Key, Save, Shield, Link as LinkIcon, Unlink, CheckCircle, Code, Copy, Trash2, Plus, AlertCircle, Subtitles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { updateCurrentUser, getSettings, getEnabledSSOProviders, getAPITokens, createAPIToken, revokeAPIToken, getTelegramBotStatus, setupTelegramBot, updateTelegramBot, startTelegramBot, stopTelegramBot, testTelegramBot, deleteTelegramBot, resetTelegramBotChatId, getFolderOrganization, updateFolderOrganization } from '../../api';
+import { updateCurrentUser, getSettings, getEnabledSSOProviders, getAPITokens, createAPIToken, revokeAPIToken, getTelegramBotStatus, setupTelegramBot, updateTelegramBot, startTelegramBot, stopTelegramBot, testTelegramBot, deleteTelegramBot, resetTelegramBotChatId, getFolderOrganization, updateFolderOrganization, getSubtitleSettings, updateSubtitleSettings } from '../../api';
+import {
+  SUBTITLE_LANGUAGE_OPTIONS,
+  SUBTITLE_TEXT_COLOR_CSS,
+  SUBTITLE_POSITION_BOTTOM_CSS,
+  DEFAULT_PLAYER_SUBTITLE_PREFS,
+  buildSubtitleOverlayStyle,
+  getPlayerSubtitlePrefs,
+  savePlayerSubtitlePrefs
+} from '../../utils/subtitleUtils';
 import showToast from '../../utils/toast';
 
 // Provider 아이콘 (SSOAccountModal과 동일)
@@ -95,6 +104,20 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
   const [secondLevel, setSecondLevel] = useState('none');
   const [loadingFolderSettings, setLoadingFolderSettings] = useState(false);
 
+  // Subtitle Settings state (server auto co-download + browser player display)
+  const [autoDownloadSubtitles, setAutoDownloadSubtitles] = useState(false);
+  const [subtitleLanguages, setSubtitleLanguages] = useState(['ko', 'en']);
+  const [subtitleFormat, setSubtitleFormat] = useState('srt');
+  const [subtitleIncludeAuto, setSubtitleIncludeAuto] = useState(true);
+  const [playerAutoShowSubtitles, setPlayerAutoShowSubtitles] = useState(true);
+  const [playerPreferredLang, setPlayerPreferredLang] = useState('auto');
+  const [playerFontSize, setPlayerFontSize] = useState('md');
+  const [playerFontFamily, setPlayerFontFamily] = useState('default');
+  const [playerTextColor, setPlayerTextColor] = useState('white');
+  const [playerBgOpacity, setPlayerBgOpacity] = useState('high');
+  const [playerPosition, setPlayerPosition] = useState('medium');
+  const [loadingSubtitleSettings, setLoadingSubtitleSettings] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       // Reset form data when modal opens
@@ -147,6 +170,11 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
       // Folder Organization 탭일 때 설정 로드
       if (activeTab === 'folder-organization') {
         loadFolderOrganizationSettings();
+      }
+
+      // Subtitles 탭일 때 자막 설정 로드
+      if (activeTab === 'subtitles') {
+        loadSubtitleSettings();
       }
     }
   }, [isOpen, currentUser, activeTab]);
@@ -391,6 +419,86 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
     } finally {
       setLoadingFolderSettings(false);
     }
+  };
+
+  // Subtitle Settings functions
+  const loadSubtitleSettings = async () => {
+    try {
+      setLoadingSubtitleSettings(true);
+      const playerPrefs = getPlayerSubtitlePrefs();
+      setPlayerAutoShowSubtitles(playerPrefs.autoShow);
+      setPlayerPreferredLang(playerPrefs.preferredLang);
+      setPlayerFontSize(playerPrefs.fontSize);
+      setPlayerFontFamily(playerPrefs.fontFamily);
+      setPlayerTextColor(playerPrefs.textColor);
+      setPlayerBgOpacity(playerPrefs.bgOpacity);
+      setPlayerPosition(playerPrefs.position);
+
+      const serverSettings = await getSubtitleSettings();
+      setAutoDownloadSubtitles(Boolean(serverSettings.auto_download_subtitles));
+      setSubtitleLanguages(
+        Array.isArray(serverSettings.subtitle_languages) && serverSettings.subtitle_languages.length > 0
+          ? serverSettings.subtitle_languages
+          : ['ko', 'en']
+      );
+      setSubtitleFormat(serverSettings.subtitle_format === 'vtt' ? 'vtt' : 'srt');
+      setSubtitleIncludeAuto(Boolean(serverSettings.subtitle_include_auto));
+    } catch (error) {
+      console.error('Failed to load subtitle settings:', error);
+      showToast.error(t('subtitles.loadFailed'));
+    } finally {
+      setLoadingSubtitleSettings(false);
+    }
+  };
+
+  const toggleSubtitleLanguage = (langCode) => {
+    setSubtitleLanguages((prev) => (
+      prev.includes(langCode)
+        ? prev.filter((item) => item !== langCode)
+        : [...prev, langCode]
+    ));
+  };
+
+  const handleSaveSubtitleSettings = async () => {
+    if (autoDownloadSubtitles && subtitleLanguages.length === 0) {
+      showToast.error(t('subtitles.languagesRequired'));
+      return;
+    }
+
+    try {
+      setLoadingSubtitleSettings(true);
+      await updateSubtitleSettings({
+        auto_download_subtitles: autoDownloadSubtitles,
+        subtitle_languages: subtitleLanguages.length > 0 ? subtitleLanguages : ['ko', 'en'],
+        subtitle_format: subtitleFormat,
+        subtitle_include_auto: subtitleIncludeAuto
+      });
+      savePlayerSubtitlePrefs({
+        autoShow: playerAutoShowSubtitles,
+        preferredLang: playerPreferredLang,
+        fontSize: playerFontSize,
+        fontFamily: playerFontFamily,
+        textColor: playerTextColor,
+        bgOpacity: playerBgOpacity,
+        position: playerPosition
+      });
+      showToast.success(t('subtitles.saved'));
+    } catch (error) {
+      console.error('Failed to save subtitle settings:', error);
+      showToast.error(error.message || t('subtitles.saveFailed'));
+    } finally {
+      setLoadingSubtitleSettings(false);
+    }
+  };
+
+  const handleResetPlayerSubtitleStyle = () => {
+    setPlayerAutoShowSubtitles(DEFAULT_PLAYER_SUBTITLE_PREFS.autoShow);
+    setPlayerPreferredLang(DEFAULT_PLAYER_SUBTITLE_PREFS.preferredLang);
+    setPlayerFontSize(DEFAULT_PLAYER_SUBTITLE_PREFS.fontSize);
+    setPlayerFontFamily(DEFAULT_PLAYER_SUBTITLE_PREFS.fontFamily);
+    setPlayerTextColor(DEFAULT_PLAYER_SUBTITLE_PREFS.textColor);
+    setPlayerBgOpacity(DEFAULT_PLAYER_SUBTITLE_PREFS.bgOpacity);
+    setPlayerPosition(DEFAULT_PLAYER_SUBTITLE_PREFS.position);
   };
 
   // Convert snake_case to camelCase for translation keys
@@ -757,6 +865,7 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
             )}
             {/* Folder Organization Tab */}
             <button
+              type="button"
               onClick={() => setActiveTab('folder-organization')}
               className={`px-4 sm:px-6 py-3 font-medium transition-colors ${
                 activeTab === 'folder-organization'
@@ -769,6 +878,21 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
                 <span className="whitespace-nowrap text-sm sm:text-base">{t('settings.system.folderOrganization')}</span>
+              </div>
+            </button>
+            {/* Subtitles Tab */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('subtitles')}
+              className={`px-4 sm:px-6 py-3 font-medium transition-colors ${
+                activeTab === 'subtitles'
+                  ? 'text-yt-red border-b-2 border-yt-red'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Subtitles className="w-4 h-4 flex-shrink-0" />
+                <span className="whitespace-nowrap text-sm sm:text-base">{t('subtitles.tab')}</span>
               </div>
             </button>
           </div>
@@ -1431,8 +1555,348 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
             </div>
           )}
 
+          {/* Subtitles Tab */}
+          {activeTab === 'subtitles' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-1">{t('subtitles.title')}</h3>
+                <p className="text-sm text-gray-400">{t('subtitles.description')}</p>
+              </div>
+
+              {loadingSubtitleSettings ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-yt-red"></div>
+                </div>
+              ) : (
+                <>
+                  {/* Section 1: Server Auto Co-Download */}
+                  <div className="bg-yt-dark rounded-lg p-4 space-y-4 border border-gray-700/70">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">
+                        {t('subtitles.downloadSectionTitle')}
+                      </h4>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {t('subtitles.downloadSectionDescription')}
+                      </p>
+                    </div>
+
+                    {/* Auto download toggle */}
+                    <label className="flex items-start justify-between gap-4 cursor-pointer">
+                      <div>
+                        <div className="text-sm font-medium text-gray-200">
+                          {t('subtitles.autoDownloadLabel')}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {t('subtitles.autoDownloadHint')}
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoDownloadSubtitles}
+                        onChange={(e) => setAutoDownloadSubtitles(e.target.checked)}
+                        className="mt-1 w-5 h-5 accent-red-600 rounded cursor-pointer flex-shrink-0"
+                      />
+                    </label>
+
+                    {/* Language selection chips */}
+                    <div className={`space-y-2 transition-opacity ${autoDownloadSubtitles ? 'opacity-100' : 'opacity-50'}`}>
+                      <label className="block text-sm font-medium text-gray-300">
+                        {t('subtitles.languagesLabel')}
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {SUBTITLE_LANGUAGE_OPTIONS.map((lang) => {
+                          const selected = subtitleLanguages.includes(lang.code);
+                          return (
+                            <button
+                              key={lang.code}
+                              type="button"
+                              onClick={() => toggleSubtitleLanguage(lang.code)}
+                              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border transition-colors ${
+                                selected
+                                  ? 'bg-emerald-600/30 border-emerald-500 text-emerald-200'
+                                  : 'bg-yt-darker border-gray-600 text-gray-400 hover:text-white hover:border-gray-500'
+                              }`}
+                            >
+                              {t(lang.labelKey)} ({lang.short})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Format + Auto-generated */}
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-800 transition-opacity ${autoDownloadSubtitles ? 'opacity-100' : 'opacity-50'}`}>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.formatLabel')}
+                        </label>
+                        <select
+                          value={subtitleFormat}
+                          onChange={(e) => setSubtitleFormat(e.target.value)}
+                          className="w-full bg-yt-darker border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yt-red"
+                        >
+                          <option value="srt">{t('subtitles.formatSrt')}</option>
+                          <option value="vtt">{t('subtitles.formatVtt')}</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-start pt-1 sm:pt-7">
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={subtitleIncludeAuto}
+                            onChange={(e) => setSubtitleIncludeAuto(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 accent-red-600 rounded cursor-pointer flex-shrink-0"
+                          />
+                          <div>
+                            <div className="text-sm font-medium text-gray-200">
+                              {t('subtitles.includeAutoLabel')}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {t('subtitles.includeAutoHint')}
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Browser Player Subtitle Display */}
+                  <div className="bg-yt-dark rounded-lg p-4 space-y-4 border border-gray-700/70">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">
+                          {t('subtitles.playerSectionTitle')}
+                        </h4>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {t('subtitles.playerSectionDescription')}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleResetPlayerSubtitleStyle}
+                        className="px-2.5 py-1 rounded bg-yt-darker hover:bg-gray-700 border border-gray-600 text-xs text-gray-300 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        {t('subtitles.resetStyle')}
+                      </button>
+                    </div>
+
+                    <label className="flex items-center justify-between gap-4 cursor-pointer">
+                      <span className="text-sm font-medium text-gray-200">
+                        {t('subtitles.autoShowLabel')}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={playerAutoShowSubtitles}
+                        onChange={(e) => setPlayerAutoShowSubtitles(e.target.checked)}
+                        className="w-5 h-5 accent-red-600 rounded cursor-pointer flex-shrink-0"
+                      />
+                    </label>
+
+                    {/* Preferred Language + Font Size */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.preferredLangLabel')}
+                        </label>
+                        <select
+                          value={playerPreferredLang}
+                          onChange={(e) => setPlayerPreferredLang(e.target.value)}
+                          className="w-full bg-yt-darker border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yt-red"
+                        >
+                          <option value="auto">{t('subtitles.preferredLangAuto')}</option>
+                          {SUBTITLE_LANGUAGE_OPTIONS.map((lang) => (
+                            <option key={lang.code} value={lang.code}>
+                              {t(lang.labelKey)} ({lang.short})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.fontSizeLabel')}
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: 'sm', label: t('subtitles.fontSizeSm') },
+                            { id: 'md', label: t('subtitles.fontSizeMd') },
+                            { id: 'lg', label: t('subtitles.fontSizeLg') },
+                            { id: 'xl', label: t('subtitles.fontSizeXl') }
+                          ].map((sizeOpt) => (
+                            <button
+                              key={sizeOpt.id}
+                              type="button"
+                              onClick={() => setPlayerFontSize(sizeOpt.id)}
+                              className={`py-2 px-1 rounded-lg text-xs font-medium border transition-colors ${
+                                playerFontSize === sizeOpt.id
+                                  ? 'bg-yt-red border-yt-red text-white'
+                                  : 'bg-yt-darker border-gray-600 text-gray-300 hover:border-gray-500'
+                              }`}
+                            >
+                              {sizeOpt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Font Family + Text Color */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.fontFamilyLabel')}
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: 'default', label: t('subtitles.fontFamilyDefault') },
+                            { id: 'gothic', label: t('subtitles.fontFamilyGothic') },
+                            { id: 'serif', label: t('subtitles.fontFamilySerif') },
+                            { id: 'mono', label: t('subtitles.fontFamilyMono') }
+                          ].map((fontOpt) => (
+                            <button
+                              key={fontOpt.id}
+                              type="button"
+                              onClick={() => setPlayerFontFamily(fontOpt.id)}
+                              className={`py-2 px-1 rounded-lg text-xs font-medium border transition-colors ${
+                                playerFontFamily === fontOpt.id
+                                  ? 'bg-yt-red border-yt-red text-white'
+                                  : 'bg-yt-darker border-gray-600 text-gray-300 hover:border-gray-500'
+                              }`}
+                            >
+                              {fontOpt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.textColorLabel')}
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: 'white', label: t('subtitles.colorWhite') },
+                            { id: 'yellow', label: t('subtitles.colorYellow') },
+                            { id: 'lime', label: t('subtitles.colorLime') },
+                            { id: 'cyan', label: t('subtitles.colorCyan') }
+                          ].map((colorOpt) => (
+                            <button
+                              key={colorOpt.id}
+                              type="button"
+                              onClick={() => setPlayerTextColor(colorOpt.id)}
+                              className={`py-2 px-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center justify-center gap-1.5 ${
+                                playerTextColor === colorOpt.id
+                                  ? 'bg-gray-700 border-yt-red text-white'
+                                  : 'bg-yt-darker border-gray-600 text-gray-300 hover:border-gray-500'
+                              }`}
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-white/30 flex-shrink-0"
+                                style={{ backgroundColor: SUBTITLE_TEXT_COLOR_CSS[colorOpt.id] }}
+                              />
+                              <span className="truncate">{colorOpt.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Background Opacity + Position */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.bgOpacityLabel')}
+                        </label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: 'none', label: t('subtitles.bgNone') },
+                            { id: 'medium', label: t('subtitles.bgMedium') },
+                            { id: 'high', label: t('subtitles.bgHigh') },
+                            { id: 'solid', label: t('subtitles.bgSolid') }
+                          ].map((bgOpt) => (
+                            <button
+                              key={bgOpt.id}
+                              type="button"
+                              onClick={() => setPlayerBgOpacity(bgOpt.id)}
+                              className={`py-2 px-1 rounded-lg text-xs font-medium border transition-colors ${
+                                playerBgOpacity === bgOpt.id
+                                  ? 'bg-yt-red border-yt-red text-white'
+                                  : 'bg-yt-darker border-gray-600 text-gray-300 hover:border-gray-500'
+                              }`}
+                            >
+                              {bgOpt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          {t('subtitles.positionLabel')}
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            { id: 'low', label: t('subtitles.positionLow') },
+                            { id: 'medium', label: t('subtitles.positionMedium') },
+                            { id: 'high', label: t('subtitles.positionHigh') }
+                          ].map((posOpt) => (
+                            <button
+                              key={posOpt.id}
+                              type="button"
+                              onClick={() => setPlayerPosition(posOpt.id)}
+                              className={`py-2 px-1 rounded-lg text-xs font-medium border transition-colors ${
+                                playerPosition === posOpt.id
+                                  ? 'bg-yt-red border-yt-red text-white'
+                                  : 'bg-yt-darker border-gray-600 text-gray-300 hover:border-gray-500'
+                              }`}
+                            >
+                              {posOpt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Live Subtitle Preview Frame (16:9 mini video preview) */}
+                    <div className="relative h-28 sm:h-32 rounded-lg overflow-hidden border border-gray-800 bg-gradient-to-br from-slate-900 via-gray-900 to-zinc-950">
+                      <div
+                        className="absolute inset-x-3 flex justify-center transition-all duration-200"
+                        style={{ bottom: SUBTITLE_POSITION_BOTTOM_CSS[playerPosition] || '10%' }}
+                      >
+                        <span
+                          className="inline-block rounded text-center leading-snug max-w-full"
+                          style={buildSubtitleOverlayStyle({
+                            fontSize: playerFontSize,
+                            fontFamily: playerFontFamily,
+                            textColor: playerTextColor,
+                            bgOpacity: playerBgOpacity,
+                            position: playerPosition
+                          })}
+                        >
+                          {t('subtitles.previewSample')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    type="button"
+                    onClick={handleSaveSubtitleSettings}
+                    disabled={loadingSubtitleSettings}
+                    className="w-full bg-yt-red hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{loadingSubtitleSettings ? t('profile.saving') : t('profile.saveChanges')}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
-          {activeTab !== 'sso' && activeTab !== 'api-tokens' && activeTab !== 'telegram-bot' && activeTab !== 'folder-organization' && (
+          {activeTab !== 'sso' && activeTab !== 'api-tokens' && activeTab !== 'telegram-bot' && activeTab !== 'folder-organization' && activeTab !== 'subtitles' && (
             <div className="flex gap-3 pt-4 border-t border-gray-700">
             <button
               type="button"

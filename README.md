@@ -16,6 +16,13 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.12
+
+- Fixed **fullscreen 4-sided letterboxing** on lower-resolution or non-16:9 videos (e.g., 592p, 21:9, 10:9) so videos scale cleanly to fill the screen while preserving aspect ratio.
+- Added **web player subtitle playback** with on-the-fly SRT→WebVTT conversion, CC language track picker, `C` shortcut toggle, and customizable caption styling (font size, font family, text color, background opacity, and vertical position).
+- Added a dedicated **Subtitles** tab in Account Settings to configure server-wide **automatic subtitle co-downloading** (multi-language selection, SRT/VTT format, auto-generated captions) across Web UI, browser extension, and Telegram bot, along with player caption display preferences.
+- Cleaned up library subtitle presentation: standalone subtitle files are hidden from **All Types** and displayed with dedicated subtitle cards (`SRT · KO`, actual file size) in the **Subtitle** tab, while videos with matching subtitles show a crisp **`CC`** badge.
+
 ## What's New in 1.1.11
 
 - Added **Grid, List (with sortable column headers), and Folder views** (actual NAS folders plus grouping by Month, Site, or Uploader) to both My Library and Public Board with full file action parity across all views.
