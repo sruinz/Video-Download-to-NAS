@@ -6,7 +6,11 @@ import Login from './components/Login';
 import Register from './components/Register';
 import DownloadForm from './components/DownloadForm';
 import VideoGrid from './components/VideoGrid';
+import VideoListView from './components/VideoListView';
+import VideoFolderView from './components/VideoFolderView';
+import FileBrowseContainer from './components/FileBrowseContainer';
 import LibraryFilters from './components/LibraryFilters';
+import { extractDisplayFilename } from './utils/folderTree';
 import Settings from './pages/Settings';
 import PublicBoard from './pages/PublicBoard';
 import ShareLinksManagement from './pages/ShareLinksManagement';
@@ -48,6 +52,32 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [fileTypeFilter, setFileTypeFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date-desc');
+
+  // View & Browse states (persisted in localStorage)
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = localStorage.getItem('vdtn_library_viewMode');
+    return ['grid', 'list', 'folder'].includes(saved) ? saved : 'grid';
+  });
+  const [browseMode, setBrowseMode] = useState(() => {
+    const saved = localStorage.getItem('vdtn_library_browseMode');
+    return ['infinite', 'pagination'].includes(saved) ? saved : 'infinite';
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = Number(localStorage.getItem('vdtn_library_pageSize'));
+    return [12, 24, 48, 96].includes(saved) ? saved : 24;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('vdtn_library_viewMode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('vdtn_library_browseMode', browseMode);
+  }, [browseMode]);
+
+  useEffect(() => {
+    localStorage.setItem('vdtn_library_pageSize', String(pageSize));
+  }, [pageSize]);
 
   // Version check (관리자만)
   const { 
@@ -206,13 +236,19 @@ function App() {
         case 'date-asc':
           return new Date(a.created_at) - new Date(b.created_at);
         case 'name-asc':
-          return a.filename.localeCompare(b.filename);
+          return extractDisplayFilename(a.filename).localeCompare(extractDisplayFilename(b.filename));
         case 'name-desc':
-          return b.filename.localeCompare(a.filename);
+          return extractDisplayFilename(b.filename).localeCompare(extractDisplayFilename(a.filename));
         case 'size-desc':
           return (b.file_size || 0) - (a.file_size || 0);
         case 'size-asc':
           return (a.file_size || 0) - (b.file_size || 0);
+        case 'type-asc':
+          return (a.file_type || '').localeCompare(b.file_type || '') ||
+            extractDisplayFilename(a.filename).localeCompare(extractDisplayFilename(b.filename));
+        case 'type-desc':
+          return (b.file_type || '').localeCompare(a.file_type || '') ||
+            extractDisplayFilename(a.filename).localeCompare(extractDisplayFilename(b.filename));
         default:
           return 0;
       }
@@ -476,6 +512,12 @@ function App() {
             onFileTypeChange={setFileTypeFilter}
             sortBy={sortBy}
             onSortChange={setSortBy}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            browseMode={browseMode}
+            onBrowseModeChange={setBrowseMode}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
           />
 
           {loading && files.length === 0 ? (
@@ -485,15 +527,51 @@ function App() {
             </div>
           ) : filteredAndSortedFiles.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-gray-400">검색 결과가 없습니다</p>
+              <p className="text-gray-400">
+                {files.length === 0 ? t('library.empty.title') : t('library.noSearchResults')}
+              </p>
             </div>
-          ) : (
-            <VideoGrid 
-              files={filteredAndSortedFiles} 
+          ) : viewMode === 'folder' ? (
+            <VideoFolderView
+              files={filteredAndSortedFiles}
               onFileDeleted={handleFileDeleted}
               onFileUpdated={loadLibrary}
               currentUser={currentUser}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              browseMode={browseMode}
+              pageSize={pageSize}
+              storagePrefix="library"
             />
+          ) : (
+            <FileBrowseContainer
+              items={filteredAndSortedFiles}
+              browseMode={browseMode}
+              pageSize={pageSize}
+              resetKey={`${searchQuery}|${fileTypeFilter}|${sortBy}|${viewMode}`}
+            >
+              {(visibleFiles) => (
+                viewMode === 'list' ? (
+                  <VideoListView
+                    files={visibleFiles}
+                    playlistFiles={filteredAndSortedFiles}
+                    onFileDeleted={handleFileDeleted}
+                    onFileUpdated={loadLibrary}
+                    currentUser={currentUser}
+                    sortBy={sortBy}
+                    onSortChange={setSortBy}
+                  />
+                ) : (
+                  <VideoGrid
+                    files={visibleFiles}
+                    playlistFiles={filteredAndSortedFiles}
+                    onFileDeleted={handleFileDeleted}
+                    onFileUpdated={loadLibrary}
+                    currentUser={currentUser}
+                  />
+                )
+              )}
+            </FileBrowseContainer>
           )}
         </div>
       </main>
@@ -553,6 +631,17 @@ function App() {
                 className="text-blue-400 hover:text-blue-300 transition-colors"
               >
                 {t('update.guide')}
+              </a>
+              {' '}•{' '}
+              <a
+                href="https://www.buymeacoffee.com/sruinz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-yellow-400 hover:text-yellow-300 transition-colors font-medium"
+                title={t('support.buyMeACoffeeTitle')}
+              >
+                <span>☕</span>
+                <span>{t('support.buyMeACoffee')}</span>
               </a>
             </p>
           </div>

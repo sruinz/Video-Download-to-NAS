@@ -24,7 +24,7 @@ const Footer = ({ currentVersion, updateAvailable }) => {
           </span>
         </div>
         
-        <div>
+        <div className="flex items-center gap-3">
           <a
             href="https://svrforum.com/article_series/dispArticle_seriesView?series_id=8"
             target="_blank"
@@ -32,6 +32,17 @@ const Footer = ({ currentVersion, updateAvailable }) => {
             className="hover:text-white transition-colors"
           >
             {t('update.guide')}
+          </a>
+          <span className="text-gray-600">•</span>
+          <a
+            href="https://www.buymeacoffee.com/sruinz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-yellow-400 hover:text-yellow-300 transition-colors font-medium"
+            title={t('support.buyMeACoffeeTitle')}
+          >
+            <span>☕</span>
+            <span>{t('support.buyMeACoffee')}</span>
           </a>
         </div>
       </div>

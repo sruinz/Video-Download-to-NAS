@@ -55,6 +55,7 @@ async def get_public_files(
             "file_size": file.file_size,
             "thumbnail": file.thumbnail,
             "duration": file.duration,
+            "resolution": file.resolution,
             "public_title": file.public_title or file.filename.split('/')[-1],
             "public_description": file.public_description,
             "created_at": file.created_at,

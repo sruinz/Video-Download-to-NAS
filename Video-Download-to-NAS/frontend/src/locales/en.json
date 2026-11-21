@@ -154,7 +154,8 @@
     "loading": "Loading your library...",
     "deleteConfirm": "Are you sure you want to delete this file?",
     "deleteSuccess": "File deleted successfully",
-    "deleteFailed": "Delete failed: {{error}}"
+    "deleteFailed": "Delete failed: {{error}}",
+    "noSearchResults": "No matching files found"
   },
   "file": {
     "play": "Play",
@@ -176,7 +177,11 @@
     "invalidFilename": "Invalid filename",
     "filenameEmpty": "Filename cannot be empty",
     "filenameTooLong": "Filename is too long",
-    "filenameExists": "A file with this name already exists"
+    "filenameExists": "A file with this name already exists",
+    "downloading": "Downloading...",
+    "downloadCompleted": "Download completed!",
+    "downloadFailed": "Download failed: {{error}}",
+    "deleting": "Deleting file..."
   },
   "language": {
     "title": "Language",
@@ -391,7 +396,9 @@
     "unpublishConfirm": "Remove this file from the public board?",
     "unpublishSuccess": "File unpublished successfully",
     "unpublishFailed": "Failed to unpublish file",
-    "uploadedBy": "Uploaded by"
+    "uploadedBy": "Uploaded by",
+    "publish": "Publish to Public Board",
+    "loadFailed": "Failed to load public files: {{error}}"
   },
   "shareLinks": {
     "title": "Share Links Management",
@@ -437,7 +444,8 @@
     "warnings": {
       "expired": "This link has expired",
       "maxViews": "Maximum views reached"
-    }
+    },
+    "create": "Create Share Link"
   },
   "sort": {
     "dateDesc": "Newest First",
@@ -445,7 +453,10 @@
     "nameAsc": "Name A-Z",
     "nameDesc": "Name Z-A",
     "sizeDesc": "Largest First",
-    "sizeAsc": "Smallest First"
+    "sizeAsc": "Smallest First",
+    "label": "Sort by",
+    "typeAsc": "Type (A-Z)",
+    "typeDesc": "Type (Z-A)"
   },
   "changePassword": {
     "title": "Change Password",
@@ -1038,5 +1049,61 @@
     "audioCodec": "Audio Codec",
     "bitrate": "Bitrate",
     "originalUrl": "Original URL"
+  },
+  "view": {
+    "modeLabel": "View mode",
+    "grid": "Grid",
+    "list": "List",
+    "folder": "Folder"
+  },
+  "browse": {
+    "modeLabel": "Browse mode",
+    "infinite": "Infinite Scroll",
+    "pagination": "Pagination",
+    "pageSizeLabel": "Items per page",
+    "perPage": "{{count}} / page",
+    "pageRange": "Showing {{start}}–{{end}} of {{total}}",
+    "loadMore": "Load more ({{shown}} / {{total}})",
+    "backToTop": "Back to top"
+  },
+  "list": {
+    "header": {
+      "name": "Filename",
+      "uploader": "Uploader",
+      "type": "Type",
+      "size": "Size",
+      "date": "Created",
+      "actions": "Actions"
+    },
+    "publicBadge": "Public"
+  },
+  "folder": {
+    "root": "Home",
+    "goUp": "Up",
+    "groupActual": "NAS Folders",
+    "groupDate": "By Month",
+    "groupSite": "By Site",
+    "groupUploader": "By Uploader",
+    "uncategorized": "Other",
+    "foldersHeading": "Folders ({{count}})",
+    "filesHeading": "Files ({{count}})",
+    "itemCount": "{{count}} files",
+    "noSubfoldersHint": "All files are currently stored in the root folder. You can group them by month or site."
+  },
+  "player": {
+    "previous": "Previous",
+    "next": "Next",
+    "playlist": "Playlist",
+    "repeatOff": "Repeat Off (Click: Repeat All)",
+    "repeatAll": "Repeat All (Click: Repeat One)",
+    "repeatOne": "Repeat One (Click: Repeat Off)",
+    "shuffleOff": "Shuffle Off",
+    "shuffleOn": "Shuffle On"
+  },
+  "support": {
+    "buyMeACoffee": "Buy Me a Coffee",
+    "buyMeACoffeeTitle": "Buy Me a Coffee",
+    "enjoyingApp": "Enjoying VDtN?",
+    "buttonLabel": "Buy Me a Coffee"
   }
 }

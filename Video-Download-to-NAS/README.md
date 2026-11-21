@@ -1,5 +1,12 @@
 # Video Download to NAS
 
+## What's New in 1.1.11
+
+- Added **Grid, List (with sortable column headers), and Folder views** (actual NAS folders plus grouping by Month, Site, or Uploader) to both My Library and Public Board with full file action parity across all views.
+- Added selectable **Infinite Scroll** and **Pagination** (`12 / 24 / 48 / 96` items per page) browse modes with preferences saved automatically.
+- Added **Repeat (Repeat All / Repeat One)** and **Shuffle** playback modes to the media player, plus playlist continuity on Public Board.
+- Added **Buy Me a Coffee** support links to the footer and Account Settings modal.
+
 ## What's New in 1.1.10
 
 - Fixed an issue where downloads requested via browser extension or API resulted in distorted filenames when URLs or video IDs were passed as the filename parameter.

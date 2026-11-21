@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.11] - 2026-11-21
+
+### Added
+- Added Grid, List (with sortable column headers), and Folder views (actual NAS paths plus grouping by Month, Site, or Uploader) for both My Library and Public Board while preserving all file actions across every view
+- Added switchable Infinite Scroll and Pagination browse modes with configurable items per page (`12 / 24 / 48 / 96`) persisted in `localStorage`
+- Added Repeat (`Off / Repeat All / Repeat One`) and Shuffle playback controls with playlist history to the media player, and enabled playlist playback on Public Board
+- Added Buy Me a Coffee support links to the footer and Account Settings modal with full i18n support
+
 ## [1.1.10] - 2026-11-01
 
 ### Fixed

@@ -154,7 +154,8 @@
     "loading": "라이브러리를 불러오는 중...",
     "deleteConfirm": "정말로 이 파일을 삭제하시겠습니까?",
     "deleteSuccess": "파일이 삭제되었습니다",
-    "deleteFailed": "삭제 실패: {{error}}"
+    "deleteFailed": "삭제 실패: {{error}}",
+    "noSearchResults": "검색 결과가 없습니다"
   },
   "file": {
     "play": "재생",
@@ -176,7 +177,11 @@
     "invalidFilename": "잘못된 파일 이름",
     "filenameEmpty": "파일 이름은 비워둘 수 없습니다",
     "filenameTooLong": "파일 이름이 너무 깁니다",
-    "filenameExists": "같은 이름의 파일이 이미 존재합니다"
+    "filenameExists": "같은 이름의 파일이 이미 존재합니다",
+    "downloading": "다운로드 중...",
+    "downloadCompleted": "다운로드 완료!",
+    "downloadFailed": "다운로드 실패: {{error}}",
+    "deleting": "파일 삭제 중..."
   },
   "language": {
     "title": "언어",
@@ -391,7 +396,9 @@
     "unpublishConfirm": "이 파일을 공개 게시판에서 제거하시겠습니까?",
     "unpublishSuccess": "게시가 취소되었습니다",
     "unpublishFailed": "게시 취소에 실패했습니다",
-    "uploadedBy": "업로더"
+    "uploadedBy": "업로더",
+    "publish": "공개 게시판에 게시",
+    "loadFailed": "공개 파일을 불러오는데 실패했습니다: {{error}}"
   },
   "shareLinks": {
     "title": "공유 링크 관리",
@@ -437,7 +444,8 @@
     "warnings": {
       "expired": "이 링크는 만료되었습니다",
       "maxViews": "최대 조회수에 도달했습니다"
-    }
+    },
+    "create": "공유 링크 생성"
   },
   "sort": {
     "dateDesc": "최신순",
@@ -445,7 +453,10 @@
     "nameAsc": "이름 오름차순",
     "nameDesc": "이름 내림차순",
     "sizeDesc": "크기 큰순",
-    "sizeAsc": "크기 작은순"
+    "sizeAsc": "크기 작은순",
+    "label": "정렬 기준",
+    "typeAsc": "유형 (A-Z)",
+    "typeDesc": "유형 (Z-A)"
   },
   "changePassword": {
     "title": "비밀번호 변경",
@@ -1038,5 +1049,61 @@
     "audioCodec": "오디오 코덱",
     "bitrate": "비트레이트",
     "originalUrl": "원본 URL"
+  },
+  "view": {
+    "modeLabel": "보기 방식",
+    "grid": "그리드",
+    "list": "리스트",
+    "folder": "폴더"
+  },
+  "browse": {
+    "modeLabel": "탐색 방식",
+    "infinite": "무한 스크롤",
+    "pagination": "페이지네이션",
+    "pageSizeLabel": "표시 개수",
+    "perPage": "{{count}}개씩",
+    "pageRange": "{{total}}개 중 {{start}}–{{end}} 표시",
+    "loadMore": "더 보기 ({{shown}} / {{total}})",
+    "backToTop": "맨 위로"
+  },
+  "list": {
+    "header": {
+      "name": "파일명",
+      "uploader": "작성자",
+      "type": "유형",
+      "size": "크기",
+      "date": "생성일",
+      "actions": "작업"
+    },
+    "publicBadge": "공개"
+  },
+  "folder": {
+    "root": "홈",
+    "goUp": "상위 폴더",
+    "groupActual": "실제 폴더",
+    "groupDate": "월별",
+    "groupSite": "사이트별",
+    "groupUploader": "작성자별",
+    "uncategorized": "기타",
+    "foldersHeading": "폴더 ({{count}})",
+    "filesHeading": "파일 ({{count}})",
+    "itemCount": "{{count}}개 파일",
+    "noSubfoldersHint": "현재 모든 파일이 루트 폴더에 저장되어 있습니다. 월별 또는 사이트별 폴더로 묶어 볼 수 있습니다."
+  },
+  "player": {
+    "previous": "이전 영상",
+    "next": "다음 영상",
+    "playlist": "재생 목록",
+    "repeatOff": "반복 재생 끔 (클릭: 전체 반복)",
+    "repeatAll": "전체 반복 중 (클릭: 1개 반복)",
+    "repeatOne": "1개 반복 중 (클릭: 반복 끔)",
+    "shuffleOff": "랜덤 재생 끔",
+    "shuffleOn": "랜덤 재생 켜짐"
+  },
+  "support": {
+    "buyMeACoffee": "커피 후원",
+    "buyMeACoffeeTitle": "개발자에게 커피 한 잔 후원하기",
+    "enjoyingApp": "VDtN이 마음에 드셨나요?",
+    "buttonLabel": "Buy Me a Coffee"
   }
 }

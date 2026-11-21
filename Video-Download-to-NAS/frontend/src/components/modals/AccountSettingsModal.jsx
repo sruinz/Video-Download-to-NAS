@@ -1452,6 +1452,24 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
           </div>
           )}
         </form>
+
+        {/* Modal Footer: Support / Buy Me a Coffee */}
+        <div className="px-6 py-2.5 bg-yt-darker/80 border-t border-gray-700/60 flex items-center justify-between text-xs text-gray-400">
+          <div className="flex items-center gap-1.5">
+            <span className="text-yellow-400">☕</span>
+            <span>{t('support.enjoyingApp')}</span>
+          </div>
+          <a
+            href="https://www.buymeacoffee.com/sruinz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#FFDD00] hover:bg-[#ffea4d] text-gray-900 font-medium transition-colors text-xs shadow-sm"
+            title={t('support.buyMeACoffeeTitle')}
+          >
+            <span>☕</span>
+            <span>{t('support.buttonLabel')}</span>
+          </a>
+        </div>
       </div>
 
       {/* 토큰 생성 모달 */}

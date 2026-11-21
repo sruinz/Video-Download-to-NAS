@@ -1,7 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, Volume2, VolumeX, Maximize, Minimize, HelpCircle, RotateCcw, RotateCw, List, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import {
+  X,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Minimize,
+  HelpCircle,
+  RotateCcw,
+  RotateCw,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Repeat,
+  Repeat1,
+  Shuffle
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import {
+  getNextRepeatMode,
+  resolveNextTrack,
+  resolvePreviousTrack
+} from '../../utils/playbackOrder';
 
 export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex, onClose, setModalState }) {
+  const { t } = useTranslation();
   const videoRef = useRef(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -14,43 +39,152 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
   const [showControls, setShowControls] = useState(true);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [repeatMode, setRepeatMode] = useState(() => {
+    const saved = localStorage.getItem('videoPlayerRepeatMode');
+    return ['off', 'all', 'one'].includes(saved) ? saved : 'off';
+  });
+  const [isShuffle, setIsShuffle] = useState(() => (
+    localStorage.getItem('videoPlayerShuffle') === 'true'
+  ));
   const controlsTimeoutRef = useRef(null);
   const clickTimeoutRef = useRef(null);
+  const shuffleVisitedRef = useRef([]);
+  const shuffleHistoryRef = useRef([]);
+
+  useEffect(() => {
+    localStorage.setItem('videoPlayerRepeatMode', repeatMode);
+  }, [repeatMode]);
+
+  useEffect(() => {
+    localStorage.setItem('videoPlayerShuffle', String(isShuffle));
+  }, [isShuffle]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    shuffleVisitedRef.current = typeof currentIndex === 'number' ? [currentIndex] : [];
+    shuffleHistoryRef.current = [];
+  }, [isOpen, playlist]);
+
+  const toggleRepeatMode = () => {
+    setRepeatMode((prev) => getNextRepeatMode(prev));
+  };
+
+  const toggleShuffle = () => {
+    setIsShuffle((prev) => {
+      const next = !prev;
+      if (next) {
+        shuffleVisitedRef.current = typeof currentIndex === 'number' ? [currentIndex] : [];
+        shuffleHistoryRef.current = [];
+      }
+      return next;
+    });
+  };
+
+  const replayCurrentMedia = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => {});
+    }
+  };
 
   // Navigation functions
-  const goToNext = () => {
-    if (playlist && currentIndex < playlist.length - 1) {
-      const nextFile = playlist[currentIndex + 1];
+  const goToNext = (fromEnded = false) => {
+    const playlistLength = playlist ? playlist.length : 0;
+    const resolution = resolveNextTrack({
+      playlistLength,
+      currentIndex: currentIndex || 0,
+      repeatMode,
+      isShuffle,
+      visitedIndices: shuffleVisitedRef.current,
+      fromEnded
+    });
+
+    if (resolution.action === 'replay') {
+      replayCurrentMedia();
+      return;
+    }
+
+    if (resolution.action === 'move' && playlist && playlist[resolution.nextIndex]) {
+      if (isShuffle) {
+        shuffleHistoryRef.current.push(currentIndex || 0);
+        if (resolution.resetVisited) {
+          shuffleVisitedRef.current = [resolution.nextIndex];
+        } else if (!shuffleVisitedRef.current.includes(resolution.nextIndex)) {
+          shuffleVisitedRef.current.push(resolution.nextIndex);
+        }
+      }
+
+      const nextFile = playlist[resolution.nextIndex];
       setModalState(prev => ({
         ...prev,
+        type: nextFile.file_type === 'audio' ? 'audio' : 'video',
         file: nextFile,
-        currentIndex: currentIndex + 1
+        currentIndex: resolution.nextIndex
       }));
     }
   };
 
   const goToPrevious = () => {
-    if (playlist && currentIndex > 0) {
-      const prevFile = playlist[currentIndex - 1];
+    const playlistLength = playlist ? playlist.length : 0;
+    const resolution = resolvePreviousTrack({
+      playlistLength,
+      currentIndex: currentIndex || 0,
+      repeatMode,
+      isShuffle,
+      historyStack: shuffleHistoryRef.current
+    });
+
+    if (resolution.action === 'replay') {
+      replayCurrentMedia();
+      return;
+    }
+
+    if (resolution.action === 'move' && playlist && playlist[resolution.prevIndex]) {
+      if (resolution.popHistory) {
+        shuffleHistoryRef.current.pop();
+      }
+      const prevFile = playlist[resolution.prevIndex];
       setModalState(prev => ({
         ...prev,
+        type: prevFile.file_type === 'audio' ? 'audio' : 'video',
         file: prevFile,
-        currentIndex: currentIndex - 1
+        currentIndex: resolution.prevIndex
       }));
     }
   };
 
   const playFileAtIndex = (index) => {
     if (playlist && index >= 0 && index < playlist.length) {
+      if (isShuffle) {
+        shuffleHistoryRef.current.push(currentIndex || 0);
+        if (!shuffleVisitedRef.current.includes(index)) {
+          shuffleVisitedRef.current.push(index);
+        }
+      }
       const selectedFile = playlist[index];
       setModalState(prev => ({
         ...prev,
+        type: selectedFile.file_type === 'audio' ? 'audio' : 'video',
         file: selectedFile,
         currentIndex: index
       }));
       setShowPlaylist(false);
     }
   };
+
+  const hasMultipleTracks = Boolean(playlist && playlist.length > 1);
+  const canGoPrevious = hasMultipleTracks && (
+    currentIndex > 0 || repeatMode === 'all' || (isShuffle && shuffleHistoryRef.current.length > 0)
+  );
+  const canGoNext = hasMultipleTracks && (
+    currentIndex < playlist.length - 1 || repeatMode === 'all' || isShuffle
+  );
+
+  const repeatTooltip = repeatMode === 'one'
+    ? t('player.repeatOne')
+    : repeatMode === 'all'
+      ? t('player.repeatAll')
+      : t('player.repeatOff');
 
   // Load video with auth token
   useEffect(() => {
@@ -370,12 +504,7 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
               onLoadedMetadata={handleLoadedMetadata}
               onWaiting={() => setIsBuffering(true)}
               onCanPlay={() => setIsBuffering(false)}
-              onEnded={() => {
-                // Auto play next audio if available
-                if (playlist && currentIndex < playlist.length - 1) {
-                  goToNext();
-                }
-              }}
+              onEnded={() => goToNext(true)}
             />
           </div>
         ) : (
@@ -397,12 +526,7 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
             onLoadedMetadata={handleLoadedMetadata}
             onWaiting={() => setIsBuffering(true)}
             onCanPlay={() => setIsBuffering(false)}
-            onEnded={() => {
-              // Auto play next video if available
-              if (playlist && currentIndex < playlist.length - 1) {
-                goToNext();
-              }
-            }}
+            onEnded={() => goToNext(true)}
             onClick={(e) => {
               e.stopPropagation();
               // Clear any existing click timeout
@@ -502,11 +626,11 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
             <div className="flex items-center justify-between text-white">
               <div className="flex items-center gap-2 sm:gap-4">
                 {/* Previous Video (if playlist available) */}
-                {playlist && currentIndex > 0 && (
+                {canGoPrevious && (
                   <button
                     onClick={goToPrevious}
                     className="hover:text-yt-red transition-colors"
-                    title="Previous video"
+                    title={t('player.previous')}
                   >
                     <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
@@ -541,11 +665,11 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
                 </button>
 
                 {/* Next Video (if playlist available) */}
-                {playlist && currentIndex < playlist.length - 1 && (
+                {canGoNext && (
                   <button
-                    onClick={goToNext}
+                    onClick={() => goToNext(false)}
                     className="hover:text-yt-red transition-colors"
-                    title="Next video"
+                    title={t('player.next')}
                   >
                     <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
@@ -590,12 +714,36 @@ export default function VideoPlayerModal({ isOpen, file, playlist, currentIndex,
               </div>
 
               <div className="flex items-center gap-2 sm:gap-4">
+                {/* Shuffle (if playlist has multiple items) */}
+                {hasMultipleTracks && (
+                  <button
+                    onClick={toggleShuffle}
+                    className={`hover:text-yt-red transition-colors ${isShuffle ? 'text-yt-red' : ''}`}
+                    title={isShuffle ? t('player.shuffleOn') : t('player.shuffleOff')}
+                  >
+                    <Shuffle className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                )}
+
+                {/* Repeat (off -> all -> one) */}
+                <button
+                  onClick={toggleRepeatMode}
+                  className={`hover:text-yt-red transition-colors ${repeatMode !== 'off' ? 'text-yt-red' : ''}`}
+                  title={repeatTooltip}
+                >
+                  {repeatMode === 'one' ? (
+                    <Repeat1 className="w-5 h-5 sm:w-6 sm:h-6" />
+                  ) : (
+                    <Repeat className="w-5 h-5 sm:w-6 sm:h-6" />
+                  )}
+                </button>
+
                 {/* Playlist (if available) */}
-                {playlist && playlist.length > 1 && (
+                {hasMultipleTracks && (
                   <button
                     onClick={() => setShowPlaylist(!showPlaylist)}
                     className={`hover:text-yt-red transition-colors ${showPlaylist ? 'text-yt-red' : ''}`}
-                    title="Show playlist"
+                    title={t('player.playlist')}
                   >
                     <List className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>

@@ -9,12 +9,19 @@
 
 <img width="558" height="417" alt="스크린샷 2025-11-24 11 02 30" src="https://github.com/user-attachments/assets/93ec418e-d282-4ba4-95bd-670834a7a08e" />
 
-<img width="1353" height="864" alt="스크린샷 2025-11-24 11 00 21" src="https://github.com/user-attachments/assets/fcf368e6-948c-4781-9716-e924616fe945" />
+<img width="1024" height="643" alt="VDtN v1.1.11 Main Screen" src="./images/VDtN-v1.1.11-main.jpg" />
 
 
 A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compatible with the [Video Download to NAS Extension](https://github.com/sruinz/Video-Download-to-NAS-Extension).
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
+
+## What's New in 1.1.11
+
+- Added **Grid, List (with sortable column headers), and Folder views** (actual NAS folders plus grouping by Month, Site, or Uploader) to both My Library and Public Board with full file action parity across all views.
+- Added selectable **Infinite Scroll** and **Pagination** (`12 / 24 / 48 / 96` items per page) browse modes with preferences saved automatically.
+- Added **Repeat (Repeat All / Repeat One)** and **Shuffle** playback modes to the media player, plus playlist continuity on Public Board.
+- Added **Buy Me a Coffee** support links to the footer and Account Settings modal.
 
 ## What's New in 1.1.10
 

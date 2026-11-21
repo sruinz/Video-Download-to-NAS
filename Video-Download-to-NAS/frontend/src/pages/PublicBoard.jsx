@@ -1,36 +1,72 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Globe, Play, Download as DownloadIcon, ExternalLink, User, Calendar, X } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { getPublicFiles, getFileUrl, unpublishFileFromBoard } from '../api';
-import { useModal } from '../contexts/ModalContext';
+import { getPublicFiles } from '../api';
 import showToast from '../utils/toast';
 import UserProfileMenu from '../components/UserProfileMenu';
 import LibraryFilters from '../components/LibraryFilters';
+import VideoGrid from '../components/VideoGrid';
+import VideoListView from '../components/VideoListView';
+import VideoFolderView from '../components/VideoFolderView';
+import FileBrowseContainer from '../components/FileBrowseContainer';
+import { extractDisplayFilename } from '../utils/folderTree';
 
 export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShareLinks, onOpenSettings }) {
   const { t } = useTranslation();
-  const { showVideoPlayer, showConfirmModal } = useModal();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [fileTypeFilter, setFileTypeFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date-desc');
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState(null);
+
+  // View & Browse states (persisted in localStorage)
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = localStorage.getItem('vdtn_publicBoard_viewMode');
+    return ['grid', 'list', 'folder'].includes(saved) ? saved : 'grid';
+  });
+  const [browseMode, setBrowseMode] = useState(() => {
+    const saved = localStorage.getItem('vdtn_publicBoard_browseMode');
+    return ['infinite', 'pagination'].includes(saved) ? saved : 'pagination';
+  });
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = Number(localStorage.getItem('vdtn_publicBoard_pageSize'));
+    return [12, 24, 48, 96].includes(saved) ? saved : 24;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('vdtn_publicBoard_viewMode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('vdtn_publicBoard_browseMode', browseMode);
+  }, [browseMode]);
+
+  useEffect(() => {
+    localStorage.setItem('vdtn_publicBoard_pageSize', String(pageSize));
+  }, [pageSize]);
 
   useEffect(() => {
     loadFiles();
-  }, [page]);
+  }, []);
 
   const loadFiles = async () => {
     try {
       setLoading(true);
-      const data = await getPublicFiles(page, 20, searchQuery);
-      setFiles(data.files);
-      setPagination(data.pagination);
+      const firstPage = await getPublicFiles(1, 100, '');
+      const collected = [...(firstPage.files || [])];
+      const totalPages = firstPage.pagination?.pages || 1;
+
+      for (let nextPage = 2; nextPage <= totalPages; nextPage += 1) {
+        const pageData = await getPublicFiles(nextPage, 100, '');
+        if (pageData?.files?.length) {
+          collected.push(...pageData.files);
+        }
+      }
+
+      setFiles(collected);
     } catch (error) {
       console.error('Failed to load public files:', error);
-      showToast.error(`공개 파일을 불러오는데 실패했습니다: ${error.message}`);
+      showToast.error(t('publicBoard.loadFailed', { error: error.message }));
     } finally {
       setLoading(false);
     }
@@ -40,96 +76,53 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
   const filteredAndSortedFiles = useMemo(() => {
     let result = [...files];
 
-    // Apply file type filter
-    if (fileTypeFilter !== 'all') {
-      result = result.filter(file => file.file_type === fileTypeFilter);
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((file) => {
+        const title = (file.public_title || '').toLowerCase();
+        const filename = (file.filename || '').toLowerCase();
+        const description = (file.public_description || '').toLowerCase();
+        const uploader = (file.uploader?.username || '').toLowerCase();
+        return (
+          title.includes(query) ||
+          filename.includes(query) ||
+          description.includes(query) ||
+          uploader.includes(query)
+        );
+      });
     }
 
-    // Apply sorting
+    if (fileTypeFilter !== 'all') {
+      result = result.filter((file) => file.file_type === fileTypeFilter);
+    }
+
     result.sort((a, b) => {
+      const nameA = a.public_title || extractDisplayFilename(a.filename);
+      const nameB = b.public_title || extractDisplayFilename(b.filename);
       switch (sortBy) {
         case 'date-desc':
           return new Date(b.created_at) - new Date(a.created_at);
         case 'date-asc':
           return new Date(a.created_at) - new Date(b.created_at);
         case 'name-asc':
-          return (a.public_title || a.filename).localeCompare(b.public_title || b.filename);
+          return nameA.localeCompare(nameB);
         case 'name-desc':
-          return (b.public_title || b.filename).localeCompare(a.public_title || a.filename);
+          return nameB.localeCompare(nameA);
         case 'size-desc':
           return (b.file_size || 0) - (a.file_size || 0);
         case 'size-asc':
           return (a.file_size || 0) - (b.file_size || 0);
+        case 'type-asc':
+          return (a.file_type || '').localeCompare(b.file_type || '') || nameA.localeCompare(nameB);
+        case 'type-desc':
+          return (b.file_type || '').localeCompare(a.file_type || '') || nameA.localeCompare(nameB);
         default:
           return 0;
       }
     });
 
     return result;
-  }, [files, fileTypeFilter, sortBy]);
-
-  const handlePlay = (file) => {
-    if (file.file_type === 'video' || file.file_type === 'audio') {
-      // Mark file as from public board for proper API endpoint usage
-      showVideoPlayer({ ...file, fromPublicBoard: true });
-    }
-  };
-
-  const handleUnpublish = async (fileId) => {
-    try {
-      const confirmed = await showConfirmModal({
-        title: t('publicBoard.unpublish'),
-        message: t('publicBoard.unpublishConfirm'),
-        confirmText: t('modal.delete'),
-        cancelText: t('modal.cancel'),
-        danger: true
-      });
-
-      if (!confirmed) return;
-      
-      await unpublishFileFromBoard(fileId);
-      showToast.success(t('publicBoard.unpublishSuccess'));
-      loadFiles(); // Reload the list
-    } catch (error) {
-      if (error.message !== 'User cancelled') {
-        console.error('Failed to unpublish file:', error);
-        showToast.error(t('publicBoard.unpublishFailed'));
-      }
-    }
-  };
-
-  const handleDownload = async (file) => {
-    try {
-      const url = getFileUrl(file.id);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.filename.split('/').pop();
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      showToast.error('다운로드에 실패했습니다');
-    }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (!bytes) return 'Unknown';
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
-  };
-
-  const formatDuration = (seconds) => {
-    if (!seconds) return null;
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, [files, searchQuery, fileTypeFilter, sortBy]);
 
   return (
     <div className="min-h-screen bg-yt-dark text-white p-4">
@@ -142,14 +135,19 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
               <h1 className="text-2xl sm:text-3xl font-bold whitespace-nowrap">{t('publicBoard.title')}</h1>
             </div>
             <div className="flex items-center gap-3">
+              <span className="hidden sm:inline text-sm text-gray-400">
+                {filteredAndSortedFiles.length === files.length
+                  ? t('library.files', { count: files.length })
+                  : `${filteredAndSortedFiles.length} / ${files.length}`}
+              </span>
               <button
                 onClick={onClose}
                 className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
                 {t('publicBoard.backButton')}
               </button>
-              <UserProfileMenu 
-                currentUser={currentUser} 
+              <UserProfileMenu
+                currentUser={currentUser}
                 onLogout={onLogout}
                 onOpenShareLinks={onOpenShareLinks}
                 onOpenSettings={onOpenSettings}
@@ -162,18 +160,21 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
         {/* Filters */}
         <LibraryFilters
           searchQuery={searchQuery}
-          onSearchChange={(value) => {
-            setSearchQuery(value);
-            setPage(1);
-          }}
+          onSearchChange={setSearchQuery}
           fileTypeFilter={fileTypeFilter}
           onFileTypeChange={setFileTypeFilter}
           sortBy={sortBy}
           onSortChange={setSortBy}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          browseMode={browseMode}
+          onBrowseModeChange={setBrowseMode}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
         />
 
-        {/* Files Grid */}
-        {loading ? (
+        {/* Files Area */}
+        {loading && files.length === 0 ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto"></div>
             <p className="mt-4 text-gray-400">{t('publicBoard.loading')}</p>
@@ -185,147 +186,52 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
               {files.length === 0 ? t('publicBoard.empty') : t('publicBoard.noResults')}
             </p>
             <p className="text-gray-500 mt-2">
-              {files.length === 0 
+              {files.length === 0
                 ? t('publicBoard.emptyDescription')
-                : t('publicBoard.noResultsDescription')
-              }
+                : t('publicBoard.noResultsDescription')}
             </p>
           </div>
+        ) : viewMode === 'folder' ? (
+          <VideoFolderView
+            files={filteredAndSortedFiles}
+            onFileUpdated={loadFiles}
+            currentUser={currentUser}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            browseMode={browseMode}
+            pageSize={pageSize}
+            isPublicBoard
+            storagePrefix="publicBoard"
+          />
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredAndSortedFiles.map(file => (
-                <div key={file.id} className="bg-yt-light rounded-lg overflow-hidden hover:bg-gray-700 transition-colors group">
-                  {/* Thumbnail */}
-                  <div className="relative aspect-video bg-gray-800 flex items-center justify-center">
-                    {file.thumbnail ? (
-                      <img
-                        src={
-                          file.thumbnail.startsWith('http') 
-                            ? file.thumbnail 
-                            : `/api/thumbnail/${file.id}?token=${localStorage.getItem('token')}`
-                        }
-                        alt={file.public_title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="text-gray-500">
-                        {file.file_type === 'video' ? (
-                          <Play className="w-12 h-12" />
-                        ) : (
-                          <DownloadIcon className="w-12 h-12" />
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Unpublish button for own files or super_admin - shown on hover */}
-                    {currentUser && (file.uploader.id === currentUser.id || currentUser.role === 'super_admin') && (
-                      <button
-                        onClick={() => handleUnpublish(file.id)}
-                        className="absolute top-2 right-2 p-2 bg-red-600/80 hover:bg-red-600 rounded-full transition-all opacity-0 group-hover:opacity-100 z-10"
-                        title={t('publicBoard.unpublish')}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                    
-                    {/* Duration */}
-                    {file.duration && (
-                      <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                        {formatDuration(file.duration)}
-                      </div>
-                    )}
-
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      {(file.file_type === 'video' || file.file_type === 'audio') && (
-                        <button
-                          onClick={() => handlePlay(file)}
-                          className="p-3 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                          title="재생"
-                        >
-                          <Play className="w-5 h-5" />
-                        </button>
-                      )}
-                      {file.original_url && (
-                        <a
-                          href={file.original_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-3 bg-blue-600/60 hover:bg-blue-600/80 rounded-full transition-colors"
-                          title="원본 영상 보기"
-                        >
-                          <ExternalLink className="w-5 h-5" />
-                        </a>
-                      )}
-                      <button
-                        onClick={() => handleDownload(file)}
-                        className="p-3 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                        title="다운로드"
-                      >
-                        <DownloadIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-white mb-2 line-clamp-2">
-                      {file.public_title}
-                    </h3>
-                    
-                    {file.public_description && (
-                      <p className="text-sm text-gray-400 mb-3 line-clamp-2">
-                        {file.public_description}
-                      </p>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        <span>{file.uploader.username}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>{new Date(file.created_at).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-2 text-xs text-gray-500">
-                      {formatFileSize(file.file_size)} • {file.file_type}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Pagination */}
-            {pagination && pagination.pages > 1 && (
-              <div className="mt-8 flex justify-center">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage(page - 1)}
-                    disabled={page === 1}
-                    className="px-4 py-2 bg-yt-light hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
-                  >
-                    이전
-                  </button>
-                  
-                  <span className="px-4 py-2 bg-yt-light rounded-lg">
-                    {page} / {pagination.pages}
-                  </span>
-                  
-                  <button
-                    onClick={() => setPage(page + 1)}
-                    disabled={page === pagination.pages}
-                    className="px-4 py-2 bg-yt-light hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
-                  >
-                    다음
-                  </button>
-                </div>
-              </div>
+          <FileBrowseContainer
+            items={filteredAndSortedFiles}
+            browseMode={browseMode}
+            pageSize={pageSize}
+            resetKey={`${searchQuery}|${fileTypeFilter}|${sortBy}|${viewMode}`}
+          >
+            {(visibleFiles) => (
+              viewMode === 'list' ? (
+                <VideoListView
+                  files={visibleFiles}
+                  playlistFiles={filteredAndSortedFiles}
+                  onFileUpdated={loadFiles}
+                  currentUser={currentUser}
+                  sortBy={sortBy}
+                  onSortChange={setSortBy}
+                  isPublicBoard
+                />
+              ) : (
+                <VideoGrid
+                  files={visibleFiles}
+                  playlistFiles={filteredAndSortedFiles}
+                  onFileUpdated={loadFiles}
+                  currentUser={currentUser}
+                  isPublicBoard
+                />
+              )
             )}
-          </>
+          </FileBrowseContainer>
         )}
       </div>
     </div>
