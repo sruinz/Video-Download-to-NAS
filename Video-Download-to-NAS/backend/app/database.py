@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, BigInteger, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, BigInteger, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import QueuePool
@@ -84,6 +84,9 @@ class User(Base):
     subtitle_languages = Column(String(200), default='ko,en', nullable=False)  # 쉼표 구분 언어 코드
     subtitle_format = Column(String(20), default='srt', nullable=False)  # srt, vtt
     subtitle_include_auto = Column(Integer, default=1, nullable=False)  # 0 = 수동 자막만, 1 = 자동 생성 자막 포함
+
+    # 영상 설명(메타데이터) 자동 저장 설정 (기본 OFF)
+    auto_save_description = Column(Integer, default=0, nullable=False)  # 0 = off, 1 = on
     
     # Relationships
     files = relationship("DownloadedFile", back_populates="user", cascade="all, delete-orphan")
@@ -122,6 +125,9 @@ class DownloadedFile(Base):
     is_public = Column(Integer, default=0, nullable=False, index=True)  # 0 = private, 1 = public
     public_title = Column(String, nullable=True)  # Custom title for public board
     public_description = Column(String, nullable=True)  # Description for public board
+
+    # 통합 영상 메모 / 설명 (사용자 편집 가능, 옵션 활성화 시 yt-dlp description 초기값 저장)
+    memo = Column(Text, nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="files")

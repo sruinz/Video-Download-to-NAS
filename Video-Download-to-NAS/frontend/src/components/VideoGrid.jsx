@@ -268,8 +268,12 @@ export default function VideoGrid({
                       <button
                         type="button"
                         onClick={() => handleShowInfo(file)}
-                        className="p-1.5 text-gray-400 hover:bg-gray-600/20 rounded transition-colors"
-                        title={t('file.info')}
+                        className={`p-1.5 rounded transition-colors ${
+                          file.memo && file.memo.trim()
+                            ? 'text-cyan-400 hover:bg-cyan-600/20'
+                            : 'text-gray-400 hover:bg-gray-600/20'
+                        }`}
+                        title={file.memo && file.memo.trim() ? t('file.infoWithMemo') : t('file.info')}
                       >
                         <Info className="w-3.5 h-3.5" />
                       </button>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Mail, Key, Save, Shield, Link as LinkIcon, Unlink, CheckCircle, Code, Copy, Trash2, Plus, AlertCircle, Subtitles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { updateCurrentUser, getSettings, getEnabledSSOProviders, getAPITokens, createAPIToken, revokeAPIToken, getTelegramBotStatus, setupTelegramBot, updateTelegramBot, startTelegramBot, stopTelegramBot, testTelegramBot, deleteTelegramBot, resetTelegramBotChatId, getFolderOrganization, updateFolderOrganization, getSubtitleSettings, updateSubtitleSettings } from '../../api';
+import { updateCurrentUser, getSettings, getEnabledSSOProviders, getAPITokens, createAPIToken, revokeAPIToken, getTelegramBotStatus, setupTelegramBot, updateTelegramBot, startTelegramBot, stopTelegramBot, testTelegramBot, deleteTelegramBot, resetTelegramBotChatId, getFolderOrganization, updateFolderOrganization, getSubtitleSettings, updateSubtitleSettings, getSaveSettings, updateSaveSettings } from '../../api';
 import {
   SUBTITLE_LANGUAGE_OPTIONS,
   SUBTITLE_TEXT_COLOR_CSS,
@@ -98,10 +98,11 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
   const [testingBot, setTestingBot] = useState(false);
   const [showDeleteBotModal, setShowDeleteBotModal] = useState(false);
   
-  // Folder Organization state
+  // Folder Organization & Save Settings state
   const [folderMode, setFolderMode] = useState('root');
   const [firstLevel, setFirstLevel] = useState('none');
   const [secondLevel, setSecondLevel] = useState('none');
+  const [autoSaveDescription, setAutoSaveDescription] = useState(false);
   const [loadingFolderSettings, setLoadingFolderSettings] = useState(false);
 
   // Subtitle Settings state (server auto co-download + browser player display)
@@ -387,19 +388,22 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
     }
   };
 
-  // Folder Organization functions
+  // Save Settings (Folder Organization + Metadata Auto-Save) functions
   const loadFolderOrganizationSettings = async () => {
     try {
       setLoadingFolderSettings(true);
-      const response = await getFolderOrganization();
-      setFolderMode(response.mode);
-      // Parse mode into first and second level
-      const { first, second } = parseFolderMode(response.mode);
+      const [folderRes, saveRes] = await Promise.all([
+        getFolderOrganization(),
+        getSaveSettings().catch(() => ({ auto_save_description: false }))
+      ]);
+      setFolderMode(folderRes.mode);
+      const { first, second } = parseFolderMode(folderRes.mode);
       setFirstLevel(first);
       setSecondLevel(second);
+      setAutoSaveDescription(Boolean(saveRes?.auto_save_description));
     } catch (error) {
-      console.error('Failed to load folder organization settings:', error);
-      showToast.error(t('settings.system.folderOrganizationFailed'));
+      console.error('Failed to load save settings:', error);
+      showToast.error(t('settings.system.saveSettingsFailed'));
     } finally {
       setLoadingFolderSettings(false);
     }
@@ -408,14 +412,16 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
   const handleSaveFolderOrganization = async () => {
     try {
       setLoadingFolderSettings(true);
-      // Combine first and second level into mode
       const mode = combineFolderMode(firstLevel, secondLevel);
-      await updateFolderOrganization(mode);
+      await Promise.all([
+        updateFolderOrganization(mode),
+        updateSaveSettings({ auto_save_description: autoSaveDescription })
+      ]);
       setFolderMode(mode);
-      showToast.success(t('settings.system.folderOrganizationSaved'));
+      showToast.success(t('settings.system.saveSettingsSaved'));
     } catch (error) {
-      console.error('Failed to save folder organization settings:', error);
-      showToast.error(t('settings.system.folderOrganizationFailed'));
+      console.error('Failed to save settings:', error);
+      showToast.error(t('settings.system.saveSettingsFailed'));
     } finally {
       setLoadingFolderSettings(false);
     }
@@ -863,7 +869,7 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
                 </div>
               </button>
             )}
-            {/* Folder Organization Tab */}
+            {/* Save Settings (Folder Organization + Metadata) Tab */}
             <button
               type="button"
               onClick={() => setActiveTab('folder-organization')}
@@ -877,7 +883,7 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
                 <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
-                <span className="whitespace-nowrap text-sm sm:text-base">{t('settings.system.folderOrganization')}</span>
+                <span className="whitespace-nowrap text-sm sm:text-base">{t('settings.system.saveSettingsTab')}</span>
               </div>
             </button>
             {/* Subtitles Tab */}
@@ -1472,9 +1478,14 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
             </div>
           )}
 
-          {/* Folder Organization Tab */}
+          {/* Save Settings Tab (Folder Organization + Metadata Auto-Save) */}
           {activeTab === 'folder-organization' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-1">{t('settings.system.saveSettingsTitle')}</h3>
+                <p className="text-sm text-gray-400">{t('settings.system.saveSettingsDescription')}</p>
+              </div>
+
               {loadingFolderSettings ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yt-red mx-auto"></div>
@@ -1482,62 +1493,96 @@ export default function AccountSettingsModal({ isOpen, onClose, currentUser, onS
                 </div>
               ) : (
                 <>
-                  {/* Info */}
-                  <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
-                    <p className="text-sm text-blue-200">
-                      💡 {t('settings.system.folderOrganizationInfo')}
-                    </p>
-                  </div>
-
-                  {/* Two-Step Folder Selection */}
-                  <div className="space-y-4">
-                    {/* First Level Selection */}
+                  {/* Section 1: Folder Organization */}
+                  <div className="bg-yt-dark rounded-lg p-4 space-y-4 border border-gray-700/70">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        {t('settings.system.firstLevelFolder')}
-                      </label>
-                      <select
-                        value={firstLevel}
-                        onChange={(e) => handleFirstLevelChange(e.target.value)}
-                        className="w-full bg-yt-light text-white rounded-lg p-3 border border-gray-700 focus:border-yt-red focus:outline-none"
-                      >
-                        <option value="none">{t('settings.system.folderMode.none')}</option>
-                        <option value="date">{t('settings.system.folderMode.date')}</option>
-                        <option value="site_full">{t('settings.system.folderMode.siteFull')}</option>
-                        <option value="site_name">{t('settings.system.folderMode.siteName')}</option>
-                      </select>
+                      <h4 className="text-sm font-semibold text-white">
+                        {t('settings.system.folderOrganization')}
+                      </h4>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {t('settings.system.folderOrganizationInfo')}
+                      </p>
                     </div>
 
-                    {/* Second Level Selection (conditional) */}
-                    {firstLevel !== 'none' && (
+                    {/* Two-Step Folder Selection */}
+                    <div className="space-y-4">
+                      {/* First Level Selection */}
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          {t('settings.system.secondLevelFolder')}
+                          {t('settings.system.firstLevelFolder')}
                         </label>
                         <select
-                          value={secondLevel}
-                          onChange={(e) => setSecondLevel(e.target.value)}
-                          className="w-full bg-yt-light text-white rounded-lg p-3 border border-gray-700 focus:border-yt-red focus:outline-none"
+                          value={firstLevel}
+                          onChange={(e) => handleFirstLevelChange(e.target.value)}
+                          className="w-full bg-yt-darker text-white rounded-lg p-3 border border-gray-600 focus:border-yt-red focus:outline-none text-sm"
                         >
                           <option value="none">{t('settings.system.folderMode.none')}</option>
-                          {getSecondLevelOptions(firstLevel).map(option => (
-                            <option key={option} value={option}>
-                              {t(`settings.system.folderMode.${toCamelCase(option)}`)}
-                            </option>
-                          ))}
+                          <option value="date">{t('settings.system.folderMode.date')}</option>
+                          <option value="site_full">{t('settings.system.folderMode.siteFull')}</option>
+                          <option value="site_name">{t('settings.system.folderMode.siteName')}</option>
                         </select>
                       </div>
-                    )}
+
+                      {/* Second Level Selection (conditional) */}
+                      {firstLevel !== 'none' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            {t('settings.system.secondLevelFolder')}
+                          </label>
+                          <select
+                            value={secondLevel}
+                            onChange={(e) => setSecondLevel(e.target.value)}
+                            className="w-full bg-yt-darker text-white rounded-lg p-3 border border-gray-600 focus:border-yt-red focus:outline-none text-sm"
+                          >
+                            <option value="none">{t('settings.system.folderMode.none')}</option>
+                            {getSecondLevelOptions(firstLevel).map(option => (
+                              <option key={option} value={option}>
+                                {t(`settings.system.folderMode.${toCamelCase(option)}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview */}
+                    <div className="bg-yt-darker rounded-lg p-3 border border-gray-800">
+                      <h5 className="text-xs font-medium text-gray-400 mb-1.5">
+                        {t('settings.system.folderPreview')}
+                      </h5>
+                      <div className="text-xs sm:text-sm text-gray-300 font-mono break-all">
+                        {t('settings.system.folderPreviewExample', { path: getFolderPreview(combineFolderMode(firstLevel, secondLevel)) })}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Preview */}
-                  <div className="bg-yt-dark rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-gray-300 mb-2">
-                      {t('settings.system.folderPreview')}
-                    </h4>
-                    <div className="text-sm text-gray-400 font-mono bg-yt-darker px-3 py-2 rounded">
-                      {t('settings.system.folderPreviewExample', { path: getFolderPreview(combineFolderMode(firstLevel, secondLevel)) })}
+                  {/* Section 2: Metadata Auto-Save */}
+                  <div className="bg-yt-dark rounded-lg p-4 space-y-3 border border-gray-700/70">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">
+                        {t('settings.system.metadataSectionTitle')}
+                      </h4>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {t('settings.system.metadataSectionDescription')}
+                      </p>
                     </div>
+
+                    <label className="flex items-start justify-between gap-4 cursor-pointer pt-1">
+                      <div>
+                        <div className="text-sm font-medium text-gray-200">
+                          {t('settings.system.autoSaveDescriptionLabel')}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {t('settings.system.autoSaveDescriptionHint')}
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoSaveDescription}
+                        onChange={(e) => setAutoSaveDescription(e.target.checked)}
+                        className="mt-1 w-5 h-5 accent-red-600 rounded cursor-pointer flex-shrink-0"
+                      />
+                    </label>
                   </div>
 
                   {/* Save Button */}

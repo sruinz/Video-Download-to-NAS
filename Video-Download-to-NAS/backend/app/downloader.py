@@ -648,6 +648,18 @@ async def download_video(
             thumbnail_value = local_thumbnail if local_thumbnail else result.get('thumbnail')
             duration_value = _duration_in_seconds(result.get('duration'))
             metadata = result.get('metadata', {})
+
+        # 사용자 계정에 '영상 설명 자동 저장'이 켜져 있는 경우 yt-dlp 표준 description을 memo 초기값으로 저장
+        auto_memo_value = None
+        if (
+            actual_file_type != 'subtitle'
+            and user
+            and getattr(user, 'auto_save_description', 0)
+            and result.get('description')
+        ):
+            normalized_desc = str(result.get('description')).strip()
+            if normalized_desc:
+                auto_memo_value = normalized_desc[:10000]
         
         # Update existing file or create new one
         if should_update:
@@ -663,6 +675,9 @@ async def download_video(
             existing_file.audio_codec = metadata.get('audio_codec')
             existing_file.bitrate = metadata.get('bitrate')
             existing_file.framerate = metadata.get('framerate')
+            # 사용자가 이미 직접 작성·편집한 메모가 있으면 덮어쓰지 않고 비어있을 때만 채운다.
+            if auto_memo_value and not existing_file.memo:
+                existing_file.memo = auto_memo_value
             file_info = existing_file
         else:
             # Create new record
@@ -679,6 +694,7 @@ async def download_video(
                 audio_codec=metadata.get('audio_codec'),
                 bitrate=metadata.get('bitrate'),
                 framerate=metadata.get('framerate'),
+                memo=auto_memo_value,
                 user_id=user_id
             )
             db.add(file_info)
@@ -928,6 +944,7 @@ def _download_with_ydl(ydl_opts: dict, url: str) -> dict:
             'thumbnail': info.get('thumbnail'),
             'duration': info.get('duration'),
             'title': info.get('title'),
+            'description': info.get('description'),
             'metadata': metadata
         }
 

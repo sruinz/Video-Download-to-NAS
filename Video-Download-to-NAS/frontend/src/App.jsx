@@ -219,11 +219,12 @@ function App() {
   const filteredAndSortedFiles = useMemo(() => {
     let result = [...enrichedFiles];
 
-    // Apply search filter
+    // Apply search filter (파일명 + 통합 메모/설명 동시 검색)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(file => 
-        file.filename.toLowerCase().includes(query)
+        file.filename.toLowerCase().includes(query) ||
+        (file.memo && file.memo.toLowerCase().includes(query))
       );
     }
 

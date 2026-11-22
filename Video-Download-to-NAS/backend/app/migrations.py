@@ -976,3 +976,42 @@ def migrate_subtitle_settings_schema(db: Session):
         "added_columns": added_count,
         "message": f"Subtitle settings schema migration completed ({added_count} columns added)",
     }
+
+
+def migrate_memo_and_description_schema(db: Session):
+    """영상 메모/설명 컬럼(downloaded_files.memo) 및 자동 저장 설정(users.auto_save_description)을 추가한다 (멱등성 보장)."""
+    engine = db.get_bind()
+    logger.info("Starting memo & description schema migration...")
+
+    added_count = 0
+
+    if not column_exists(engine, "users", "auto_save_description"):
+        logger.info("Adding auto_save_description column to users table...")
+        db.execute(text("""
+            ALTER TABLE users
+            ADD COLUMN auto_save_description INTEGER DEFAULT 0 NOT NULL
+        """))
+        db.commit()
+        logger.info("✓ Added users.auto_save_description column")
+        added_count += 1
+    else:
+        logger.info("✓ users.auto_save_description column already exists")
+
+    if not column_exists(engine, "downloaded_files", "memo"):
+        logger.info("Adding memo column to downloaded_files table...")
+        db.execute(text("""
+            ALTER TABLE downloaded_files
+            ADD COLUMN memo TEXT
+        """))
+        db.commit()
+        logger.info("✓ Added downloaded_files.memo column")
+        added_count += 1
+    else:
+        logger.info("✓ downloaded_files.memo column already exists")
+
+    logger.info("Memo & description schema migration completed successfully!")
+    return {
+        "success": True,
+        "added_columns": added_count,
+        "message": f"Memo & description schema migration completed ({added_count} columns added)",
+    }

@@ -51,6 +51,11 @@ class LibraryQuery(BaseModel):
 class FileRenameRequest(BaseModel):
     new_filename: str
 
+
+class FileMemoUpdate(BaseModel):
+    """영상 메모/설명 업데이트 요청"""
+    memo: Optional[str] = Field(default=None, max_length=10000)
+
 class APITokenCreate(BaseModel):
     name: str
     
@@ -86,6 +91,7 @@ class FileInfo(BaseModel):
     framerate: Optional[str] = None
     
     is_public: Optional[int] = 0
+    memo: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -314,6 +320,20 @@ class SubtitleSettingsResponse(BaseModel):
     subtitle_languages: List[str]
     subtitle_format: str
     subtitle_include_auto: bool
+
+    class Config:
+        from_attributes = True
+
+
+# Save Settings Models
+class SaveSettingsUpdate(BaseModel):
+    """다운로드 저장 설정 업데이트 요청"""
+    auto_save_description: bool = False
+
+
+class SaveSettingsResponse(BaseModel):
+    """다운로드 저장 설정 응답"""
+    auto_save_description: bool
 
     class Config:
         from_attributes = True

@@ -1,5 +1,11 @@
 # Video Download to NAS
 
+## What's New in 1.1.13
+
+- Added an integrated editable **Memo / Description** field in the Video Info modal with clickable URLs, collapsible long-text view, one-click copy, and library search across filenames and memos.
+- Expanded Account Settings → **Save Settings** with an optional **Auto-save video description on download** toggle (default OFF) powered by standard `yt-dlp` metadata across Web UI, browser extension, and Telegram bot downloads.
+- Highlighted the `i` info button in cyan when a file contains a memo or description.
+
 ## What's New in 1.1.12
 
 - Fixed fullscreen 4-sided letterboxing on lower-resolution or non-16:9 videos by scaling `<video>` with `w-full h-full object-contain`.

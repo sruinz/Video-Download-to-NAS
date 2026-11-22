@@ -94,6 +94,24 @@ export const renameFile = async (fileId, newFilename) => {
   return response.json();
 };
 
+export const updateFileMemo = async (fileId, memo) => {
+  const response = await fetch(`/api/file/${fileId}/memo`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ memo })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'Failed to update memo');
+  }
+
+  return response.json();
+};
+
 export const getFileUrl = (fileId) => {
   return `${API_URL}/api/file/${fileId}`;
 };
@@ -864,6 +882,40 @@ export const updateFolderOrganization = async (mode) => {
     throw new Error(error.detail || 'Failed to update folder organization');
   }
   
+  return response.json();
+};
+
+// === Save Settings (Metadata Auto-Save) ===
+export const getSaveSettings = async () => {
+  const response = await fetch('/api/users/me/save-settings', {
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get save settings');
+  }
+
+  return response.json();
+};
+
+export const updateSaveSettings = async (settings) => {
+  const response = await fetch('/api/users/me/save-settings', {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(settings)
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'Failed to update save settings');
+  }
+
   return response.json();
 };
 

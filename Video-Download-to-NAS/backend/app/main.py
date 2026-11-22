@@ -13,7 +13,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from .models import UserLogin, DownloadRequest, FileInfo, Token, DownloadStatus, FileRenameRequest
+from .models import UserLogin, DownloadRequest, FileInfo, Token, DownloadStatus, FileRenameRequest, FileMemoUpdate
 from .database import init_db, get_db, User, DownloadedFile, SessionLocal, engine, SystemSetting
 from .auth import (
     authenticate_user,
@@ -301,6 +301,15 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Subtitle settings migration error: {e}")
         print(f"⚠️  Subtitle settings migration warning: {e}")
+
+    # Run memo & description schema migration
+    try:
+        from .migrations import migrate_memo_and_description_schema
+        result = migrate_memo_and_description_schema(db)
+        print(f"✅ Memo & description schema migration completed: {result['added_columns']} columns added")
+    except Exception as e:
+        logger.error(f"Memo & description migration error: {e}")
+        print(f"⚠️  Memo & description migration warning: {e}")
     
     # Start SSO state cleanup scheduler
     try:
@@ -974,6 +983,33 @@ async def rename_file(
             "id": file_info.id,
             "filename": file_info.filename
         }
+    }
+
+@app.patch("/api/file/{file_id}/memo")
+async def update_file_memo(
+    file_id: int,
+    memo_update: FileMemoUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """파일의 통합 메모/설명을 저장하거나 비운다."""
+    file_info = db.query(DownloadedFile)\
+        .filter(DownloadedFile.id == file_id)\
+        .filter(DownloadedFile.user_id == current_user.id)\
+        .first()
+
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    cleaned = (memo_update.memo or "").strip()
+    file_info.memo = cleaned[:10000] if cleaned else None
+    db.commit()
+    db.refresh(file_info)
+
+    return {
+        "status": "success",
+        "file_id": file_info.id,
+        "memo": file_info.memo,
     }
 
 

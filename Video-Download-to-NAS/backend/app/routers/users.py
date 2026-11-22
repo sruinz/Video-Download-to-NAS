@@ -15,6 +15,8 @@ from ..models import (
     FolderOrganizationResponse,
     SubtitleSettingsUpdate,
     SubtitleSettingsResponse,
+    SaveSettingsUpdate,
+    SaveSettingsResponse,
 )
 from ..subtitle_helper import (
     parse_subtitle_languages,
@@ -610,6 +612,33 @@ async def update_subtitle_settings(
         subtitle_languages=parse_subtitle_languages(current_user.subtitle_languages),
         subtitle_format=normalize_subtitle_format(current_user.subtitle_format),
         subtitle_include_auto=bool(current_user.subtitle_include_auto),
+    )
+
+
+# === Save Settings (Metadata Auto-Save) ===
+
+@router.get("/me/save-settings", response_model=SaveSettingsResponse)
+async def get_save_settings(
+    current_user: User = Depends(get_current_user)
+):
+    """현재 사용자의 다운로드 저장 설정(영상 설명 자동 저장 여부 등)을 조회한다."""
+    return SaveSettingsResponse(
+        auto_save_description=bool(getattr(current_user, "auto_save_description", 0))
+    )
+
+
+@router.patch("/me/save-settings", response_model=SaveSettingsResponse)
+async def update_save_settings(
+    save_update: SaveSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """현재 사용자의 다운로드 저장 설정을 저장한다."""
+    current_user.auto_save_description = 1 if save_update.auto_save_description else 0
+    db.commit()
+    db.refresh(current_user)
+    return SaveSettingsResponse(
+        auto_save_description=bool(current_user.auto_save_description)
     )
 
 

@@ -164,7 +164,7 @@ export function useFileActions({
   };
 
   const handleShowInfo = (file) => {
-    openModal('videoInfo', { file });
+    openModal('videoInfo', { file, onUpdated: onFileUpdated });
   };
 
   const handleCreateShareLink = (file) => {

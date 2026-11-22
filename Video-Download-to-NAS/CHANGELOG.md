@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.13] - 2026-11-22
+
+### Added
+- Added an integrated editable **Memo / Description** section inside the Video Info modal with XSS-safe auto-linked URLs, collapsible long-text view, one-click copy, and library search support across both filenames and memos
+- Expanded the Account Settings Folder Organization tab into **Save Settings** with an optional **Auto-save video description on download** toggle (default OFF) that saves standard `yt-dlp` description metadata across Web UI, browser extension, and Telegram bot downloads while preserving user-edited memos
+- Highlighted the `i` info button in cyan (`text-cyan-400`) on grid cards and list rows when a file has a memo or description, without adding extra icon clutter
+
 ## [1.1.12] - 2026-11-21
 
 ### Fixed

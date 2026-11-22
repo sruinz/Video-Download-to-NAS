@@ -187,6 +187,7 @@ export const ModalProvider = ({ children }) => {
         <VideoInfoModal
           file={modalState.file}
           onClose={closeModal}
+          onUpdated={modalState.config?.onUpdated}
         />
       )}
     </ModalContext.Provider>

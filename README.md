@@ -16,6 +16,12 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.13
+
+- Added an integrated editable **Memo / Description** field inside the Video Info modal with clickable auto-linked URLs, collapsible view, one-click copy, and library search across both filenames and memo text.
+- Expanded Account Settings → **Save Settings** (formerly Folder Organization) with an optional **Auto-save video description on download** toggle (default OFF) using standard `yt-dlp` metadata across Web UI, browser extension, and Telegram bot downloads.
+- Subtly highlighted the `i` info icon in cyan on cards and list rows whenever a file has a memo/description.
+
 ## What's New in 1.1.12
 
 - Fixed **fullscreen 4-sided letterboxing** on lower-resolution or non-16:9 videos (e.g., 592p, 21:9, 10:9) so videos scale cleanly to fill the screen while preserving aspect ratio.
