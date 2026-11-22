@@ -46,57 +46,57 @@ export default function LibraryFilters({
       </div>
 
       {/* Filters & View Controls Row */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
         {/* Left: File Type Filter & Sort */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 min-w-0 max-w-full">
           {/* File Type Filter */}
-          <div className="flex items-center gap-1 sm:gap-2 bg-yt-dark rounded-lg p-1">
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2 bg-yt-dark rounded-lg p-1 max-w-full">
             <button
               type="button"
               onClick={() => onFileTypeChange('all')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm whitespace-nowrap ${
                 fileTypeFilter === 'all'
                   ? 'bg-yt-red text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              <SlidersHorizontal className="w-4 h-4" />
+              <SlidersHorizontal className="w-4 h-4 flex-shrink-0" />
               <span>{t('filter.allTypes')}</span>
             </button>
             <button
               type="button"
               onClick={() => onFileTypeChange('video')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm whitespace-nowrap ${
                 fileTypeFilter === 'video'
                   ? 'bg-yt-red text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              <Video className="w-4 h-4" />
+              <Video className="w-4 h-4 flex-shrink-0" />
               <span>{t('filter.video')}</span>
             </button>
             <button
               type="button"
               onClick={() => onFileTypeChange('audio')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm whitespace-nowrap ${
                 fileTypeFilter === 'audio'
                   ? 'bg-yt-red text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              <Music className="w-4 h-4" />
+              <Music className="w-4 h-4 flex-shrink-0" />
               <span>{t('filter.audio')}</span>
             </button>
             <button
               type="button"
               onClick={() => onFileTypeChange('subtitle')}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md transition-colors text-sm whitespace-nowrap ${
                 fileTypeFilter === 'subtitle'
                   ? 'bg-yt-red text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700'
               }`}
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4 h-4 flex-shrink-0" />
               <span>{t('filter.subtitle')}</span>
             </button>
           </div>
@@ -121,7 +121,7 @@ export default function LibraryFilters({
 
         {/* Right: View Mode & Browse Mode Controls */}
         {(onViewModeChange || onBrowseModeChange) && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
             {/* View Mode Switcher */}
             {onViewModeChange && (
               <div

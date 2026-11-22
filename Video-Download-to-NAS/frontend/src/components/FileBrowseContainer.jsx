@@ -80,7 +80,7 @@ export default function FileBrowseContainer({
   const remainingCount = Math.max(0, totalItems - visibleItems.length);
 
   return (
-    <div ref={containerTopRef}>
+    <div ref={containerTopRef} className="w-full min-w-0">
       {children(visibleItems)}
 
       {/* 페이지네이션 컨트롤 */}

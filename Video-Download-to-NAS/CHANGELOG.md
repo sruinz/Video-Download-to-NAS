@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.13-1] - 2026-11-22
+
+### Fixed
+- Fixed mobile List View horizontal overflow where missing `w-full min-w-0` on `<main>` allowed long truncated filenames to stretch the library container past the mobile viewport, clipping the search bar, filter bar, and pushing row action buttons off-screen
+- Improved mobile List View readability and usability by separating mobile metadata onto its own line, left-aligning mobile action buttons (`justify-start lg:justify-end`), and ensuring filter bars, Public Board, and Folder View wrap cleanly without horizontal overflow
+
 ## [1.1.13] - 2026-11-22
 
 ### Added

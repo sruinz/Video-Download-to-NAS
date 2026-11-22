@@ -102,7 +102,7 @@ export default function VideoListView({
   }
 
   return (
-    <div className="bg-yt-dark rounded-lg border border-gray-700/80 overflow-hidden">
+    <div className="w-full min-w-0 bg-yt-dark rounded-lg border border-gray-700/80 overflow-hidden">
       {/* Classification Header Row (Desktop) */}
       <div
         className={`hidden lg:grid items-center gap-3 px-4 py-3 bg-gray-800/80 border-b border-gray-700 text-xs font-semibold text-gray-300 select-none ${
@@ -177,14 +177,14 @@ export default function VideoListView({
           return (
             <div
               key={file.id}
-              className={`px-3 sm:px-4 py-3 hover:bg-yt-light/70 transition-colors flex flex-col lg:grid lg:items-center gap-3 ${
+              className={`w-full min-w-0 px-3 sm:px-4 py-3 hover:bg-yt-light/70 transition-colors flex flex-col lg:grid lg:items-center gap-2.5 lg:gap-3 ${
                 isPublicBoard
                   ? 'lg:grid-cols-[minmax(0,1fr)_120px_96px_96px_110px_140px]'
                   : 'lg:grid-cols-[minmax(0,1fr)_110px_96px_110px_250px]'
               }`}
             >
               {/* Name + Compact Thumbnail */}
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-start sm:items-center gap-3 min-w-0 w-full">
                 <button
                   type="button"
                   onClick={() => isPlayable && handlePlay(file)}
@@ -226,11 +226,11 @@ export default function VideoListView({
                   ) : null}
                 </button>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 overflow-hidden">
                   <button
                     type="button"
                     onClick={() => isPlayable && handlePlay(file)}
-                    className={`block w-full text-left font-medium text-sm text-white truncate ${
+                    className={`block w-full max-w-full text-left font-medium text-sm text-white truncate ${
                       isPlayable ? 'hover:text-yt-red cursor-pointer' : 'cursor-default'
                     }`}
                     title={file.filename}
@@ -244,40 +244,44 @@ export default function VideoListView({
                     </p>
                   )}
 
-                  <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-400">
-                    {folderPath && (
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 max-w-full truncate"
-                        title={folderPath}
-                      >
-                        <Folder className="w-3 h-3 text-yellow-400 flex-shrink-0" />
-                        <span className="truncate">{folderPath}</span>
-                      </span>
-                    )}
-                    {file.file_type === 'video' && file.resolution && (
-                      <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-medium">
-                        {file.resolution}
-                      </span>
-                    )}
-                    {subtitleBadge && (
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 font-medium"
-                        title={t('subtitles.badgeTooltip', { langs: file.subtitles.map((s) => s.shortLabel).join(', ') })}
-                      >
-                        <Subtitles className="w-3 h-3" />
-                        <span>{subtitleBadge}</span>
-                      </span>
-                    )}
-                    {!isPublicBoard && Boolean(file.is_public) && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-900/50 text-green-300">
-                        <Globe className="w-3 h-3" />
-                        <span>{t('list.publicBadge')}</span>
-                      </span>
-                    )}
-                    {/* Mobile metadata inline */}
-                    <span className="lg:hidden text-gray-500">
-                      {t(`file.${file.file_type}`)} · {formatFileSize(file.file_size)} · {new Date(file.created_at).toLocaleDateString()}
-                    </span>
+                  {(folderPath || (file.file_type === 'video' && file.resolution) || subtitleBadge || (!isPublicBoard && Boolean(file.is_public))) && (
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1 text-xs text-gray-400 min-w-0">
+                      {folderPath && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 max-w-full min-w-0"
+                          title={folderPath}
+                        >
+                          <Folder className="w-3 h-3 text-yellow-400 flex-shrink-0" />
+                          <span className="truncate">{folderPath}</span>
+                        </span>
+                      )}
+                      {file.file_type === 'video' && file.resolution && (
+                        <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-medium whitespace-nowrap">
+                          {file.resolution}
+                        </span>
+                      )}
+                      {subtitleBadge && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 font-medium whitespace-nowrap"
+                          title={t('subtitles.badgeTooltip', { langs: file.subtitles.map((s) => s.shortLabel).join(', ') })}
+                        >
+                          <Subtitles className="w-3 h-3 flex-shrink-0" />
+                          <span>{subtitleBadge}</span>
+                        </span>
+                      )}
+                      {!isPublicBoard && Boolean(file.is_public) && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-900/50 text-green-300 whitespace-nowrap">
+                          <Globe className="w-3 h-3 flex-shrink-0" />
+                          <span>{t('list.publicBadge')}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mobile metadata line */}
+                  <div className="lg:hidden mt-1 text-xs text-gray-500 break-words">
+                    {isPublicBoard && file.uploader?.username ? `${file.uploader.username} · ` : ''}
+                    {t(`file.${file.file_type}`)} · {formatFileSize(file.file_size)} · {new Date(file.created_at).toLocaleDateString()}
                   </div>
                 </div>
               </div>
@@ -307,7 +311,7 @@ export default function VideoListView({
               </div>
 
               {/* Action Buttons (All Features Preserved) */}
-              <div className="flex items-center justify-end flex-wrap gap-1 pt-1 lg:pt-0 border-t border-gray-800 lg:border-t-0">
+              <div className="flex items-center justify-start lg:justify-end flex-wrap gap-1.5 lg:gap-1 pt-2 lg:pt-0 border-t border-gray-800 lg:border-t-0">
                 {isPlayable && (
                   <button
                     type="button"

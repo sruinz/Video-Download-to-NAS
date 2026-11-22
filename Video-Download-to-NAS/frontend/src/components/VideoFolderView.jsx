@@ -115,7 +115,7 @@ export default function VideoFolderView({
   const pathResetKey = `${groupMode}:${currentPath.join('/')}:${sortBy}:${files.length}`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       {/* Folder Toolbar: Group Mode + Inner View Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-yt-dark rounded-lg p-3 border border-gray-700/80">
         {/* Left: Breadcrumb Navigation */}
@@ -168,8 +168,8 @@ export default function VideoFolderView({
         </div>
 
         {/* Right: Folder Grouping Mode + Inner View Mode */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-gray-900/70 rounded-lg p-1 border border-gray-700">
+        <div className="flex flex-wrap items-center gap-2 max-w-full">
+          <div className="flex flex-wrap items-center gap-1 bg-gray-900/70 rounded-lg p-1 border border-gray-700 max-w-full">
             {availableModes.map((modeItem) => {
               const IconComp = modeItem.icon;
               return (

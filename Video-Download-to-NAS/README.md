@@ -1,5 +1,10 @@
 # Video Download to NAS
 
+## What's New in 1.1.13-1
+
+- Fixed mobile List View horizontal overflow where long filenames stretched the library container past the mobile viewport and pushed row action buttons off-screen.
+- Improved mobile List View layout (clean filename truncation, dedicated mobile metadata line, left-aligned action buttons on small screens) and prevented horizontal overflow across filter bars, Public Board, and Folder View.
+
 ## What's New in 1.1.13
 
 - Added an integrated editable **Memo / Description** field in the Video Info modal with clickable URLs, collapsible long-text view, one-click copy, and library search across filenames and memos.

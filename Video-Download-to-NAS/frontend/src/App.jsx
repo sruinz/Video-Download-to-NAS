@@ -444,7 +444,7 @@ function App() {
     <ModalProvider>
       <WebSocketProvider onLibraryUpdate={loadLibrary}>
         <Toaster />
-        <div className="min-h-screen bg-yt-darker flex flex-col">
+        <div className="min-h-screen bg-yt-darker flex flex-col overflow-x-clip">
       {/* Update Banner (관리자만) */}
       {showBanner && (
         <UpdateBanner
@@ -455,7 +455,7 @@ function App() {
       
       {/* Header */}
       <header className="bg-yt-dark border-b border-gray-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <Video className="w-6 h-6 sm:w-8 sm:h-8 text-yt-red flex-shrink-0" />
@@ -481,14 +481,14 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+      <main className="w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
         {/* Download Form */}
         <div className="mb-6 sm:mb-8">
           <DownloadForm onDownloadStart={handleDownloadStart} currentUser={currentUser} />
         </div>
 
         {/* Library */}
-        <div className="bg-yt-light rounded-lg p-4 sm:p-6 shadow-xl">
+        <div className="w-full min-w-0 bg-yt-light rounded-lg p-4 sm:p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl sm:text-2xl font-bold truncate">{t('library.title')}</h2>

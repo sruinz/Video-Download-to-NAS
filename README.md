@@ -16,6 +16,11 @@ A modern, self-hosted media archiving tool with a beautiful dark theme UI. Compa
 
 > **Note**: This is a personal project maintained for personal use. Pull requests are not actively reviewed. Please fork if you want to add features.
 
+## What's New in 1.1.13-1
+
+- Fixed mobile List View horizontal overflow where long filenames stretched the library container past the mobile viewport and pushed row action buttons off-screen.
+- Improved mobile List View layout (clean filename truncation, dedicated mobile metadata line, left-aligned action buttons on small screens) and prevented horizontal overflow across filter bars, Public Board, and Folder View.
+
 ## What's New in 1.1.13
 
 - Added an integrated editable **Memo / Description** field inside the Video Info modal with clickable auto-linked URLs, collapsible view, one-click copy, and library search across both filenames and memo text.

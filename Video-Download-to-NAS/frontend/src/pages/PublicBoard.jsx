@@ -130,11 +130,11 @@ export default function PublicBoard({ onClose, currentUser, onLogout, onOpenShar
   }, [enrichedFiles, searchQuery, fileTypeFilter, sortBy]);
 
   return (
-    <div className="min-h-screen bg-yt-dark text-white p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-yt-dark text-white p-4 overflow-x-clip">
+      <div className="w-full min-w-0 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-3">
               <Globe className="w-8 h-8 text-blue-400 flex-shrink-0" />
               <h1 className="text-2xl sm:text-3xl font-bold whitespace-nowrap">{t('publicBoard.title')}</h1>
